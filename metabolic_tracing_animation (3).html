@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>13C Metabolic Tracing — Glucose & Glutamine into the TCA Cycle</title>
+<style>
+  :root{
+    /* light, high-contrast palette */
+    --bg:#eef2f8;            /* page bg */
+    --canvas:#ffffff;        /* svg canvas bg */
+    --panel:#ffffff;         /* side panel */
+    --panel2:#f4f7fc;        /* nested card */
+    --ink:#15233b;           /* primary text - dark navy */
+    --body:#3a4a66;          /* body text */
+    --muted:#6b7a92;         /* muted labels */
+    --line:#d6deea;          /* borders */
+    --line2:#c2cde0;
+    --glc:#1d6fd6;           /* glucose blue (darker, readable) */
+    --glc-lt:#5aa3ef;
+    --gln:#0c9a6a;           /* glutamine green (darker) */
+    --gln-lt:#3dc99a;
+    --unl:#9aa6bd;           /* unlabeled gray */
+    --hl:#d98324;            /* highlight orange (better than gold on white) */
+    --hl-bg:#fff1d6;
+    --tum:#7a3aa8;
+    --tum-lt:#b589d6;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:"Inter","Helvetica Neue",Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    line-height:1.5;
+  }
+  .wrap{max-width:1380px;margin:0 auto;padding:22px 24px 60px}
+  header{display:flex;flex-wrap:wrap;align-items:center;gap:18px;justify-content:space-between}
+  h1{font-size:22px;font-weight:800;margin:0;color:var(--ink)}
+  h1 .sub{display:block;font-weight:500;color:var(--muted);font-size:14px;margin-top:4px}
+  .modes{display:flex;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:5px;gap:4px;box-shadow:0 1px 3px rgba(20,35,59,.06)}
+  .modes button{
+    background:transparent;color:var(--muted);border:0;cursor:pointer;
+    padding:10px 16px;border-radius:9px;font-size:14px;font-weight:700;
+    display:flex;flex-direction:column;align-items:flex-start;line-height:1.15;text-align:left;
+  }
+  .modes button small{font-weight:500;font-size:11.5px;color:var(--muted);margin-top:4px}
+  .modes button.active{background:var(--ink);color:#fff;box-shadow:0 2px 6px rgba(20,35,59,.18)}
+  .modes button.active small{color:#ffd49a}
+
+  .stage{display:grid;grid-template-columns:1fr 380px;gap:18px;margin-top:20px}
+  @media(max-width:1080px){.stage{grid-template-columns:1fr}}
+  .canvas{
+    background:var(--canvas);
+    border:1px solid var(--line);border-radius:16px;padding:14px;
+    box-shadow:0 2px 8px rgba(20,35,59,.06);
+  }
+  .canvas svg{width:100%;height:auto;display:block}
+  .panel{
+    background:var(--panel);border:1px solid var(--line);border-radius:16px;
+    padding:20px;display:flex;flex-direction:column;gap:16px;
+    box-shadow:0 2px 8px rgba(20,35,59,.06);
+  }
+  .panel h2{margin:0;font-size:12px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);font-weight:700}
+  .step-title{font-size:19px;font-weight:800;color:var(--ink);margin:0 0 6px;line-height:1.22}
+  .step-desc{font-size:14px;line-height:1.6;color:var(--body);margin:0}
+  .step-desc b{color:var(--ink);background:linear-gradient(180deg,transparent 60%,var(--hl-bg) 60%);padding:0 2px}
+  .iso{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .iso .card{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:11px 13px}
+  .iso .card .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;font-weight:600}
+  .iso .card .v{font-size:16px;font-weight:800;margin-top:4px;font-variant-numeric:tabular-nums;color:var(--ink)}
+  .iso .card .v .labG{color:var(--glc)}
+  .iso .card .v .labQ{color:var(--gln)}
+
+  .controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px}
+  .btn{
+    background:var(--panel2);color:var(--ink);border:1px solid var(--line2);
+    border-radius:10px;padding:10px 16px;font-size:14px;font-weight:700;cursor:pointer;
+  }
+  .btn:hover{border-color:var(--ink);background:#eaeef6}
+  .btn.primary{background:var(--ink);border-color:var(--ink);color:#fff}
+  .btn.primary:hover{background:#223352}
+  .btn[disabled]{opacity:.4;cursor:not-allowed}
+  .speed{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:13px;font-weight:600}
+  .speed select{background:var(--panel2);color:var(--ink);border:1px solid var(--line2);border-radius:8px;padding:7px 9px;font-weight:600}
+
+  .progress{height:8px;background:#e6ecf5;border-radius:99px;overflow:hidden;margin-top:8px}
+  .progress > i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--glc),var(--gln));transition:width .3s}
+
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--body);margin-top:14px;font-weight:600}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+  .dot{width:14px;height:14px;border-radius:50%;display:inline-block;border:2px solid}
+  .dot.glc{background:var(--glc);border-color:var(--glc-lt)}
+  .dot.gln{background:var(--gln);border-color:var(--gln-lt)}
+  .dot.unl{background:transparent;border-color:var(--unl)}
+  .dot.hl{background:var(--hl);border-color:#f0b563}
+
+  .steps-strip{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .steps-strip .p{width:15px;height:15px;border-radius:4px;background:#e6ecf5;border:1px solid var(--line2);cursor:pointer;transition:all .15s}
+  .steps-strip .p.done{background:#cfe8d9;border-color:#8fc7a4}
+  .steps-strip .p.cur{background:var(--hl);border-color:#f0b563;box-shadow:0 0 0 2px rgba(217,131,36,.25)}
+
+  .insight{
+    background:linear-gradient(180deg,#fbf5ff,#f4ecff);
+    border:1px solid #d8c2f0;border-radius:16px;padding:20px 22px;margin-top:18px;
+  }
+  .insight h2{color:#6a2a9e;margin:0 0 10px;font-size:14px;letter-spacing:.4px;text-transform:uppercase;font-weight:800}
+  .insight p{font-size:14px;line-height:1.65;color:var(--body);margin:8px 0}
+  .insight p b{color:var(--ink)}
+  .insight .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:14px}
+  @media(max-width:800px){.insight .grid{grid-template-columns:1fr}}
+  .insight .cell{background:#fff;border:1px solid #e0d2f5;border-radius:12px;padding:14px 15px}
+  .insight .cell .h{font-size:13px;color:#6a2a9e;font-weight:800;margin-bottom:6px}
+  .insight .cell .t{font-size:13px;color:var(--body);line-height:1.55}
+  .insight .cell .t b{color:var(--ink)}
+
+  /* SVG styling — light theme, large text */
+  svg .arrow{stroke:#8a98b3;stroke-width:2;fill:none;marker-end:url(#ah)}
+  svg .arrow.active{stroke:var(--hl);stroke-width:3.2;marker-end:url(#ahA);filter:drop-shadow(0 0 4px rgba(217,131,36,.4))}
+  svg .arrow.tum{stroke:var(--tum);stroke-dasharray:6 4}
+  svg .arrow.tum.active{stroke:var(--hl);stroke-dasharray:none}
+  svg .enz{fill:#5a6a86;font:italic 600 12px Inter,sans-serif}
+  svg .node rect{fill:#f7faff;stroke:#b8c5db;stroke-width:1.8}
+  svg .node.tum rect{fill:#faf6ff;stroke:#cda8ec}
+  svg .node.cur rect{stroke:var(--hl);stroke-width:3;filter:drop-shadow(0 0 8px rgba(217,131,36,.45))}
+  svg .node text.name{fill:var(--ink);font:800 15px Inter,sans-serif}
+  svg .node.tum text.name{fill:var(--tum)}
+  svg .node text.fm{fill:var(--muted);font:700 11px Inter,sans-serif}
+  svg .cG{fill:var(--glc);stroke:var(--glc-lt);stroke-width:1.5}
+  svg .cQ{fill:var(--gln);stroke:var(--gln-lt);stroke-width:1.5}
+  svg .cU{fill:#ffffff;stroke:var(--unl);stroke-width:2}
+  svg .co2{fill:#a06a1a;font:italic 700 11px Inter,sans-serif}
+
+  footer{color:var(--muted);font-size:13px;margin-top:22px;line-height:1.65}
+  footer b{color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>¹³C Metabolic Tracing — Glucose &amp; Glutamine → TCA Cycle
+      <span class="sub">Carbon-resolved animation · oxidative vs tumor reductive carboxylation mode</span>
+    </h1>
+    <div class="modes" role="tablist">
+      <button id="modeOx" class="active" role="tab">
+        Oxidative TCA
+        <small>Healthy tissue · tracer ¹³C₆-glucose</small>
+      </button>
+      <button id="modeTum" role="tab">
+        Tumor reductive
+        <small>Hypoxia / HIF1α · tracer ¹³C₅-glutamine</small>
+      </button>
+    </div>
+  </header>
+
+  <div class="stage">
+    <div class="canvas">
+      <svg id="board" viewBox="0 0 1400 760" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#8a98b3"/>
+          </marker>
+          <marker id="ahA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#d98324"/>
+          </marker>
+        </defs>
+        <g id="layer_arrows"></g>
+        <g id="layer_co2"></g>
+        <g id="layer_nodes"></g>
+        <g id="layer_carbons"></g>
+      </svg>
+      <div class="legend">
+        <span><i class="dot glc"></i> ¹³C from glucose</span>
+        <span><i class="dot gln"></i> ¹³C from glutamine</span>
+        <span><i class="dot unl"></i> ¹²C unlabeled</span>
+        <span><i class="dot hl"></i> current reaction</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div>
+        <h2>Step <span id="stepIdx">1</span> / <span id="stepTot">12</span></h2>
+        <div class="progress"><i id="bar"></i></div>
+        <div class="steps-strip" id="strip"></div>
+      </div>
+      <div>
+        <div class="step-title" id="stepTitle">Loading…</div>
+        <p class="step-desc" id="stepDesc"></p>
+      </div>
+      <div class="iso" id="isoBox"></div>
+      <div class="controls">
+        <button class="btn" id="prev">◀ Back</button>
+        <button class="btn primary" id="play">▶ Play</button>
+        <button class="btn" id="next">Next ▶</button>
+        <button class="btn" id="reset">↺ Reset</button>
+        <div class="speed">Speed
+          <select id="speed">
+            <option value="2600">Slow</option>
+            <option value="1700" selected>Normal</option>
+            <option value="900">Fast</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="insight" id="insightBox">
+    <h2>Why this matters for tumor metabolism research</h2>
+    <div id="insightBody"></div>
+  </div>
+
+  <footer>
+    Each metabolite is drawn at the <b>carbon level</b>: blue dots are ¹³C carbons carried from <b>glucose</b>, green dots are ¹³C carbons carried from <b>glutamine</b>, open gray dots are unlabeled ¹²C carbons (e.g. bicarbonate / CO₂ pool). Isotopologue distributions (M+n) are the analytes measured by GC-MS / LC-HRMS of derivatized metabolites.
+  </footer>
+</div>
+
+<script>
+/* ============================================================
+   DATA-DRIVEN LAYOUT
+   Every node has a fixed bounding box. Arrow endpoints are
+   computed as the intersection of the centre-to-centre line
+   with the box edges, so arrows ALWAYS land on the right box.
+   ============================================================ */
+
+const NODES = {
+  glc:   {x:30,   y:60,  w:190, h:76, name:"Glucose",          nC:6},
+  pyr:   {x:30,   y:200, w:190, h:76, name:"Pyruvate (×2)",     nC:3},
+  lac:   {x:30,   y:340, w:190, h:72, name:"Lactate",           nC:3, tum:true},
+  accoa: {x:280,  y:130, w:190, h:76, name:"Acetyl-CoA",        nC:2},
+  gln:   {x:1180, y:60,  w:190, h:76, name:"Glutamine",         nC:5},
+  glu:   {x:1180, y:200, w:190, h:76, name:"Glutamate",        nC:5},
+  cit:   {x:620,  y:160, w:190, h:80, name:"Citrate",           nC:6},
+  icit:  {x:880,  y:260, w:190, h:80, name:"Isocitrate",        nC:6},
+  akg:   {x:980,  y:420, w:190, h:80, name:"α-Ketoglutarate",   nC:5},
+  scco:  {x:880,  y:580, w:190, h:80, name:"Succinyl-CoA",      nC:4},
+  suc:   {x:620,  y:660, w:190, h:72, name:"Succinate",         nC:4},
+  fum:   {x:360,  y:580, w:190, h:80, name:"Fumarate",          nC:4},
+  mal:   {x:260,  y:420, w:190, h:80, name:"Malate",            nC:4},
+  oaa:   {x:360,  y:260, w:190, h:80, name:"Oxaloacetate",      nC:4},
+  lipid: {x:800,  y:60,  w:230, h:76, name:"→ Cytosol · lipids", nC:0, tum:true},
+};
+
+// arrows: from -> to, optional perpendicular bias `curve`, enz label
+const ARROWS = {
+  glc_pyr:   {from:'glc',   to:'pyr',   enz:"Glycolysis"},
+  pyr_accoa: {from:'pyr',   to:'accoa', enz:"PDH"},
+  pyr_oaa:   {from:'pyr',   to:'oaa',   enz:"PC",       curve:-40},
+  pyr_lac:   {from:'pyr',   to:'lac',   enz:"LDH",      tum:true},
+  accoa_cit: {from:'accoa', to:'cit',   enz:"Citrate synthase"},
+  oaa_cit:   {from:'oaa',   to:'cit',   enz:"",         curve:40},
+  cit_icit:  {from:'cit',   to:'icit',  enz:"Aconitase"},
+  icit_akg:  {from:'icit',  to:'akg',   enz:"IDH"},
+  akg_scco:  {from:'akg',   to:'scco',  enz:"αKGDH"},
+  scco_suc:  {from:'scco',  to:'suc',   enz:"SCS",      curve:40},
+  suc_fum:   {from:'suc',   to:'fum',   enz:"SDH",      curve:-40},
+  fum_mal:   {from:'fum',   to:'mal',   enz:"Fumarase"},
+  mal_oaa:   {from:'mal',   to:'oaa',   enz:"MDH"},
+  gln_glu:   {from:'gln',   to:'glu',   enz:"GLS"},
+  glu_akg:   {from:'glu',   to:'akg',   enz:"GDH",      curve:40},
+  akg_icit_r:{from:'akg',   to:'icit',  enz:"IDH (reverse)", rev:true, tum:true},
+  icit_cit_r:{from:'icit',  to:'cit',   enz:"Aconitase (rev)", rev:true, tum:true},
+  cit_lipid: {from:'cit',   to:'lipid', enz:"ACLY export", tum:true},
+};
+
+const SVGNS = "http://www.w3.org/2000/svg";
+function el(tag, attrs){
+  const e = document.createElementNS(SVGNS, tag);
+  if(attrs) for(const k in attrs) e.setAttribute(k, attrs[k]);
+  return e;
+}
+function center(n){ return {x:n.x+n.w/2, y:n.y+n.h/2}; }
+// point on box edge of `n` along the line from n's centre toward `target`
+function edgePoint(n, target){
+  const c = center(n);
+  const dx = target.x - c.x, dy = target.y - c.y;
+  if(dx===0 && dy===0) return c;
+  const tx = dx===0 ? Infinity : (n.w/2)/Math.abs(dx);
+  const ty = dy===0 ? Infinity : (n.h/2)/Math.abs(dy);
+  const t = Math.min(tx, ty);
+  return {x: c.x + dx*t, y: c.y + dy*t};
+}
+// quadratic Bezier path with perpendicular bias `curve`
+function arrowPath(a, b, curve){
+  if(!curve) return `M ${a.x} ${a.y} L ${b.x} ${b.y}`;
+  const mx = (a.x+b.x)/2, my=(a.y+b.y)/2;
+  const dx = b.x-a.x, dy=b.y-a.y;
+  const len = Math.hypot(dx,dy) || 1;
+  const nx = -dy/len, ny = dx/len;
+  const cx = mx + nx*curve, cy = my + ny*curve;
+  return `M ${a.x} ${a.y} Q ${cx} ${cy} ${b.x} ${b.y}`;
+}
+
+// ---- build static SVG ----------------------------------------------------
+const layerArrows = document.getElementById("layer_arrows");
+const layerCo2 = document.getElementById("layer_co2");
+const layerNodes = document.getElementById("layer_nodes");
+const layerCarbons = document.getElementById("layer_carbons");
+
+// enzyme label visibility: track per-arrow so tumor arrows hide in ox mode
+const arrowLabelMap = {};
+
+for(const id in ARROWS){
+  const a = ARROWS[id];
+  const A = NODES[a.from], B = NODES[a.to];
+  const p1 = edgePoint(A, center(B));
+  const p2 = edgePoint(B, center(A));
+  const d = arrowPath(p1, p2, a.curve);
+  const path = el("path", {class:"arrow"+(a.tum?" tum":""), d:d, id:"arr_"+id, "marker-end":"url(#ah)"});
+  layerArrows.appendChild(path);
+  const mx=(p1.x+p2.x)/2, my=(p1.y+p2.y)/2;
+  const dx=p2.x-p1.x, dy=p2.y-p1.y, len=Math.hypot(dx,dy)||1;
+  const nx=-dy/len, ny=dx/len;
+  const off = a.curve ? (a.curve>0?22:-22) : 0;
+  let lx = mx + nx*off, ly = my + ny*off - 6;
+  // clamp label inside viewBox (1400 x 760)
+  lx = Math.max(40, Math.min(1360, lx));
+  ly = Math.max(18, Math.min(740, ly));
+  if(a.enz){
+    const t = el("text", {x:lx, y:ly, class:"enz", "text-anchor":"middle", id:"lbl_"+id});
+    t.textContent = a.enz;
+    layerArrows.appendChild(t);
+    arrowLabelMap[id] = t;
+  }
+  path._p1 = p1; path._p2 = p2;
+}
+
+// CO2 markers (hidden initially)
+function addCO2(id, arrowId, text){
+  const path = document.getElementById("arr_"+arrowId);
+  const p = path._p1;
+  const dx = path._p2.x - p.x, dy = path._p2.y - p.y;
+  const len = Math.hypot(dx,dy)||1;
+  const nx = -dy/len, ny = dx/len;
+  const lx = Math.max(30, Math.min(1370, p.x + nx*28));
+  const ly = Math.max(18, Math.min(740, p.y + ny*28 + 6));
+  const g = el("g", {id:id, style:"display:none"});
+  const t = el("text", {x:lx, y:ly, class:"co2", "text-anchor":"middle"});
+  t.textContent = text;
+  g.appendChild(t);
+  layerCo2.appendChild(g);
+}
+addCO2("co2_pdh",   "pyr_accoa", "CO₂↑");
+addCO2("co2_idh",   "icit_akg", "CO₂↑");
+addCO2("co2_akgdh", "akg_scco", "CO₂↑");
+
+// nodes
+for(const id in NODES){
+  const n = NODES[id];
+  const g = el("g", {class:"node"+(n.tum?" tum":""), id:"node_"+id, transform:`translate(${n.x},${n.y})`});
+  const r = el("rect", {width:n.w, height:n.h, rx:12});
+  g.appendChild(r);
+  const nm = el("text", {x:n.w/2, y:28, class:"name", "text-anchor":"middle"});
+  nm.textContent = n.name;
+  g.appendChild(nm);
+  const fm = el("text", {x:n.w/2, y:n.h-22, class:"fm", "text-anchor":"middle", id:"fm_"+id});
+  fm.textContent = n.nC>0 ? "M+0" : "—";
+  g.appendChild(fm);
+  layerNodes.appendChild(g);
+}
+
+// carbon dot positions inside each node box (single row, in the middle band)
+function carbonLayout(nC, w, h){
+  const pts = [];
+  const y = h/2 + 6;          // between the name (top) and formula (bottom)
+  const margin = 22;
+  const span = w - 2*margin;
+  const step = nC>1 ? span/(nC-1) : 0;
+  const startX = nC>1 ? margin : w/2;
+  for(let i=0;i<nC;i++) pts.push([startX + step*i, y]);
+  return pts;
+}
+const CARBON_POS = {};
+for(const id in NODES){
+  const n = NODES[id];
+  CARBON_POS[id] = n.nC>0 ? carbonLayout(n.nC, n.w, n.h) : [];
+}
+
+function renderCarbons(state){
+  layerCarbons.innerHTML = "";
+  for(const id in NODES){
+    const n = NODES[id];
+    if(n.nC===0) continue;
+    const arr = state[id];
+    const pts = CARBON_POS[id];
+    const g = el("g", {transform:`translate(${n.x},${n.y})`});
+    pts.forEach((p,i)=>{
+      const tag = arr ? arr[i] : 'U';
+      const cls = tag==='G'?'cG' : tag==='Q'?'cQ' : 'cU';
+      const c = el("circle", {cx:p[0], cy:p[1], r:6, class:cls});
+      g.appendChild(c);
+    });
+    layerCarbons.appendChild(g);
+  }
+}
+
+function updateFormulas(state){
+  for(const id in NODES){
+    const fm = document.getElementById("fm_"+id);
+    if(!fm) continue;
+    if(NODES[id].nC===0){ fm.textContent = "—"; continue; }
+    const arr = state[id] || [];
+    const labeled = arr.filter(x=>x==='G'||x==='Q').length;
+    fm.textContent = "M+"+labeled;
+  }
+}
+
+// ---- STEPS ---------------------------------------------------------------
+// 'G' = glucose 13C, 'Q' = glutamine 13C, 'U' = unlabeled 12C
+// `st(prev, patch)` returns a NEW state that merges `patch` onto `prev`,
+// carrying forward any metabolite NOT mentioned in the patch. This is the
+// correct model for an experiment: a metabolite's labeling state is sticky
+// — it only changes when the current reaction actually touches it.
+function st(prev, patch){
+  const o = {};
+  for(const k in NODES){
+    if(NODES[k].nC===0) continue;
+    if(patch && patch[k]) o[k] = patch[k].slice();
+    else if(prev && prev[k]) o[k] = prev[k].slice();
+    else o[k] = new Array(NODES[k].nC).fill('U');
+  }
+  return o;
+}
+// initial tracer state for each experiment:
+//   OX:  13C6-glucose fed (blue). Glutamine/glutamate stay UNlabeled (gray).
+//   TUM: 13C5-glutamine fed (green). Glucose/pyruvate/lactate stay UNlabeled.
+const TRACER_OX  = { glc:['G','G','G','G','G','G'] };
+const TRACER_TUM = { gln:['Q','Q','Q','Q','Q'] };
+
+const STEPS_OX = [
+  { title:"Tracer enters the cell — ¹³C₆-glucose",
+    desc:"We feed cells <b>¹³C₆-glucose</b> (all 6 carbons labeled, blue) with <b>unlabeled</b> glutamine (gray). This is the classic glucose-tracing experiment. Every metabolite pool starts unlabeled except glucose itself; the question is where each glucose carbon ends up after one full TCA turn. Glutamine flux into α-KG still happens, but its carbons are ¹²C, so they appear gray.",
+    iso:[["Glucose","<span class='labG'>M+6</span>"],["Glutamine","M+0 (unlabeled)"]],
+    apply:(prev)=>st(prev, TRACER_OX),
+    active:{nodes:['glc','gln'], arrows:[]}, co2:[] },
+  { title:"Glycolysis: glucose → two ¹³C₃-pyruvates",
+    desc:"The Embden-Meyerhof pathway splits glucose into <b>two pyruvates</b> with no carbon lost, so each pyruvate is fully labeled <b>M+3</b>. This is why glucose feeding gives a clean M+3 pyruvate / M+3 lactate signature in the media.",
+    iso:[["Pyruvate","<span class='labG'>M+3</span>"],["Lactate","<span class='labG'>M+3</span>"]],
+    apply:(prev)=>st(prev, {pyr:['G','G','G']}),
+    active:{nodes:['glc','pyr'], arrows:['glc_pyr']}, co2:[] },
+  { title:"PDH: pyruvate → acetyl-CoA + ¹³CO₂",
+    desc:"Pyruvate dehydrogenase (<b>PDH</b>) decarboxylates pyruvate: the carboxyl carbon leaves as ¹³CO₂, leaving a <b>two-carbon M+2 acetyl-CoA</b>. PDH flux gates how much glucose carbon reaches the cycle.",
+    iso:[["Acetyl-CoA","<span class='labG'>M+2</span>"],["Released CO₂","¹³CO₂ (from Glc)"]],
+    apply:(prev)=>st(prev, {accoa:['G','G']}),
+    active:{nodes:['pyr','accoa'], arrows:['pyr_accoa']}, co2:['co2_pdh'] },
+  { title:"Pyruvate carboxylase (PC): anaplerotic OAA M+3",
+    desc:"PC <b>carboxylates</b> pyruvate to oxaloacetate, replenishing cycle intermediates drained for biosynthesis. The added CO₂ comes from the unlabeled bicarbonate pool, so OAA is <b>M+3</b> from glucose (C1 = unlabeled, C2-C4 = glucose).",
+    iso:[["Oxaloacetate","<span class='labG'>M+3</span>"],["Net CO₂","+1 unlabeled"]],
+    apply:(prev)=>st(prev, {oaa:['U','G','G','G']}),
+    active:{nodes:['pyr','oaa'], arrows:['pyr_oaa']}, co2:[] },
+  { title:"Citrate synthase: OAA + acetyl-CoA → citrate M+5",
+    desc:"Citrate synthase condenses the M+2 acetyl-CoA onto the M+3 OAA, giving <b>citrate M+5</b> (3 from glucose-via-PC + 2 from glucose-via-PDH). This M+5 is the diagnostic signature of <b>glucose entering the first oxidative turn</b> of the TCA.",
+    iso:[["Citrate","<span class='labG'>M+5</span>"],["Origin","3 OAA + 2 AcCoA"]],
+    apply:(prev)=>st(prev, {cit:['U','G','G','G','G','G']}),
+    active:{nodes:['accoa','oaa','cit'], arrows:['accoa_cit','oaa_cit']}, co2:[] },
+  { title:"Aconitase: citrate → isocitrate (M+5)",
+    desc:"Aconitase isomerizes citrate to isocitrate with <b>no carbon loss</b> — same M+5. The enzyme is stereospecific, acting only on the arm derived from OAA, which determines which carbon is later released by IDH.",
+    iso:[["Isocitrate","<span class='labG'>M+5</span>"],["Δ mass","0"]],
+    apply:(prev)=>st(prev, {icit:['U','G','G','G','G','G']}),
+    active:{nodes:['cit','icit'], arrows:['cit_icit']}, co2:[] },
+  { title:"IDH: isocitrate → α-KG + ¹³CO₂",
+    desc:"Isocitrate dehydrogenase (<b>IDH</b>) releases one carbon as CO₂. In the first turn from glucose this carbon came from the OAA arm, so the released CO₂ is <b>¹³CO₂</b> and α-KG drops to <b>M+4</b>. IDH1/2 mutations (R132 / R172) — common in glioma and AML — block or rewire exactly this step.",
+    iso:[["α-Ketoglutarate","<span class='labG'>M+4</span>"],["Released CO₂","¹³CO₂"]],
+    apply:(prev)=>st(prev, {akg:['G','G','G','G','U']}),
+    active:{nodes:['icit','akg'], arrows:['icit_akg']}, co2:['co2_idh'] },
+  { title:"α-KGDH: α-KG → succinyl-CoA + ¹³CO₂",
+    desc:"α-Ketoglutarate dehydrogenase releases a second CO₂, again from the OAA-derived arm. Succinyl-CoA is now <b>M+3</b>. The two acetyl-CoA carbons are still safely inside the molecule — they only get released in the <i>second</i> turn of the cycle.",
+    iso:[["Succinyl-CoA","<span class='labG'>M+3</span>"],["Released CO₂","¹³CO₂"]],
+    apply:(prev)=>st(prev, {scco:['G','G','G','U']}),
+    active:{nodes:['akg','scco'], arrows:['akg_scco']}, co2:['co2_akgdh'] },
+  { title:"Succinate (symmetric) → fumarate — label scrambling",
+    desc:"Succinate and fumarate are <b>symmetric</b> molecules, so the enzyme cannot tell which end is which. The label pattern is effectively randomized when read out by fumarase on the next step. This is the origin of label symmetry seen in downstream malate / OAA.",
+    iso:[["Succinate","<span class='labG'>M+3</span>"],["Fumarate","M+3 (sym)"]],
+    apply:(prev)=>st(prev, {suc:['G','G','G','U'], fum:['G','G','U','G']}),
+    active:{nodes:['scco','suc','fum'], arrows:['scco_suc','suc_fum']}, co2:[] },
+  { title:"Fumarase → malate (M+3)",
+    desc:"Hydration of fumarate gives malate, retaining M+3 and the scrambled pattern. The label is now distributed across the four carbons of malate.",
+    iso:[["Malate","<span class='labG'>M+3</span>"],["Δ mass","0"]],
+    apply:(prev)=>st(prev, {mal:['G','G','U','G']}),
+    active:{nodes:['fum','mal'], arrows:['fum_mal']}, co2:[] },
+  { title:"MDH: malate → OAA (M+3, redistributed)",
+    desc:"Malate dehydrogenase regenerates OAA — now <b>M+3</b> but with the labeled carbons redistributed relative to the starting OAA. This OAA condenses with another acetyl-CoA to start a second turn.",
+    iso:[["Oxaloacetate","<span class='labG'>M+3</span>"],["Origin","cycled glucose C"]],
+    apply:(prev)=>st(prev, {oaa:['G','G','G','U']}),
+    active:{nodes:['mal','oaa'], arrows:['mal_oaa']}, co2:[] },
+  { title:"Second turn: OAA(M+3) + AcCoA(M+2) → citrate M+5 again",
+    desc:"The next citrate is again <b>M+5</b> by mass, yet because the M+3 OAA now carries carbons from the previous turn, the <i>positional</i> isotope pattern differs from the first-turn citrate. Comparing first-turn vs steady-state citrate is how researchers parse <b>cycle flux vs exchange</b>.",
+    iso:[["Citrate","<span class='labG'>M+5</span> (2nd turn)"],["Diagnostic","mass = positional"]],
+    apply:(prev)=>st(prev, {cit:['G','G','G','G','G','U']}),
+    active:{nodes:['oaa','accoa','cit'], arrows:['accoa_cit','oaa_cit']}, co2:[] },
+];
+
+const STEPS_TUM = [
+  { title:"Tumor experiment — ¹³C₅-glutamine fed",
+    desc:"This experiment feeds cells <b>¹³C₅-glutamine</b> (all 5 carbons labeled, green) with <b>unlabeled</b> glucose (gray). Under <b>hypoxia / HIF1α</b>, PDH is inhibited (via PDK1), so glucose is fermented to lactate (Warburg flux still occurs, but the lactate carbons are ¹²C and therefore gray). <b>Glutamine</b> becomes the labeled carbon source, running the TCA <i>backwards</i> through reductive carboxylation to make citrate.",
+    iso:[["Glutamine","<span class='labQ'>M+5</span>"],["Glucose / Lactate","M+0 (unlabeled)"]],
+    apply:(prev)=>st(prev, TRACER_TUM),
+    active:{nodes:['gln','glc','lac'], arrows:['glc_pyr','pyr_lac','gln_glu']}, co2:[] },
+  { title:"GLS: glutamine → glutamate (M+5)",
+    desc:"Glutaminase (<b>GLS</b>), highly upregulated in tumors, strips the amide to give <b>M+5 glutamate</b>. No carbon is lost — all five ¹³C carbons ride into the next step.",
+    iso:[["Glutamate","<span class='labQ'>M+5</span>"],["By-product","NH₄⁺"]],
+    apply:(prev)=>st(prev, {glu:['Q','Q','Q','Q','Q']}),
+    active:{nodes:['gln','glu'], arrows:['gln_glu']}, co2:[] },
+  { title:"GDH: glutamate → α-KG (M+5)",
+    desc:"Glutamate dehydrogenase / transaminases convert glutamate to <b>α-KG</b>, still fully labeled <b>M+5</b>. This α-KG is now the substrate for reductive carboxylation — note the flux arrow is the <i>reverse</i> of the oxidative direction.",
+    iso:[["α-Ketoglutarate","<span class='labQ'>M+5</span>"],["By-product","NH₄⁺"]],
+    apply:(prev)=>st(prev, {akg:['Q','Q','Q','Q','Q']}),
+    active:{nodes:['glu','akg'], arrows:['glu_akg']}, co2:[] },
+  { title:"★ Reductive carboxylation: α-KG + CO₂ → isocitrate M+5",
+    desc:"This is the <b>hallmark tumor step</b>. Mitochondrial IDH2 (and cytosolic IDH1) run <i>in reverse</i>, carboxylating α-KG with unlabeled CO₂ → isocitrate. Because the CO₂ comes from the unlabeled pool, the product stays <b>M+5</b> (5 green + 1 gray). This flux is essentially undetectable in normal oxidative tissue.",
+    iso:[["Isocitrate","<span class='labQ'>M+5</span>"],["Δ mass","0 (CO₂ unlabeled)"]],
+    apply:(prev)=>st(prev, {icit:['U','Q','Q','Q','Q','Q']}),
+    active:{nodes:['akg','icit'], arrows:['akg_icit_r']}, co2:[] },
+  { title:"Aconitase (reverse): isocitrate → citrate M+5 — diagnostic isotopologue",
+    desc:"Aconitase runs backwards to produce <b>citrate M+5</b>. This M+5 citrate arising from <b>glutamine</b> (not glucose) is the readout researchers look for to call reductive carboxylation — a mass-spectrum fingerprint that distinguishes tumor metabolism from normal tissue.",
+    iso:[["Citrate","<span class='labQ'>M+5 ★ hallmark</span>"],["Diagnostic","Gln-derived M+5"]],
+    apply:(prev)=>st(prev, {cit:['U','Q','Q','Q','Q','Q']}),
+    active:{nodes:['icit','cit'], arrows:['icit_cit_r']}, co2:[] },
+  { title:"Citrate export → ACLY → cytosolic acetyl-CoA M+2",
+    desc:"Citrate is exported to the cytosol and cleaved by <b>ATP-citrate lyase (ACLY)</b>, yielding an <b>M+2 acetyl-CoA</b> whose two carbons are both glutamine-derived (green) — exactly what you asked about. Tumors use this acetyl-CoA for <b>de novo fatty acid / cholesterol synthesis</b> — building membrane for rapid proliferation, and for histone acetylation that rewires transcription.",
+    iso:[["Cytosolic AcCoA","<span class='labQ'>M+2</span> (from citrate export)"],["Sink","lipogenesis"]],
+    apply:(prev)=>st(prev, {accoa:['Q','Q']}),
+    active:{nodes:['cit','lipid','accoa'], arrows:['cit_lipid']}, co2:[] },
+  { title:"Net effect: glutamine carbon → tumor biomass",
+    desc:"Summing up: in this regime <b>glutamine, not glucose</b>, feeds citrate and acetyl-CoA for lipid synthesis, while glucose is fermented to unlabeled lactate (the Warburg flux — present, but invisible in this tracer). Targeting GLS (CB-839 / telaglenastat), IDH mutants (ivosidenib, enasidenib) or ACLY starves the tumor of carbon — and the M+5 citrate isotopologue is the biomarker used to confirm on-target activity in patients.",
+    iso:[["Citrate isotopomer","<span class='labQ'>M+5</span>"],["Intervention","GLS / IDH / ACLY"]],
+    apply:(prev)=>st(prev, {}),
+    active:{nodes:['cit','lipid','lac','gln'], arrows:['cit_lipid','glc_pyr','pyr_lac','gln_glu']}, co2:[] },
+];
+
+// ---- RENDER STEP ---------------------------------------------------------
+const stepIdxEl = document.getElementById("stepIdx");
+const stepTotEl = document.getElementById("stepTot");
+const stepTitle = document.getElementById("stepTitle");
+const stepDesc  = document.getElementById("stepDesc");
+const isoBox    = document.getElementById("isoBox");
+const strip     = document.getElementById("strip");
+const bar       = document.getElementById("bar");
+const prevBtn   = document.getElementById("prev");
+const nextBtn   = document.getElementById("next");
+const playBtn   = document.getElementById("play");
+const resetBtn = document.getElementById("reset");
+const speedSel = document.getElementById("speed");
+const modeOx    = document.getElementById("modeOx");
+const modeTum   = document.getElementById("modeTum");
+const insightBody = document.getElementById("insightBody");
+
+let mode = "ox";
+let idx = 0;
+let playing = false;
+let timer = null;
+
+function steps(){ return mode==="ox" ? STEPS_OX : STEPS_TUM; }
+
+function clearHighlights(){
+  document.querySelectorAll(".node.cur").forEach(e=>e.classList.remove("cur"));
+  document.querySelectorAll(".arrow.active").forEach(e=>e.classList.remove("active"));
+}
+
+function setVisibility(){
+  const tumOnlyNodes = ['lac','lipid'];
+  const tumOnlyArrows = ['pyr_lac','akg_icit_r','icit_cit_r','cit_lipid'];
+  tumOnlyNodes.forEach(id=>{
+    const e = document.getElementById("node_"+id);
+    if(e) e.style.display = (mode==="tum") ? "" : "none";
+  });
+  tumOnlyArrows.forEach(id=>{
+    const e = document.getElementById("arr_"+id);
+    if(e) e.style.display = (mode==="tum") ? "" : "none";
+    const lbl = arrowLabelMap[id];
+    if(lbl) lbl.style.display = (mode==="tum") ? "" : "none";
+  });
+}
+
+function renderStep(){
+  const arr = steps();
+  const step = arr[idx];
+  stepIdxEl.textContent = (idx+1);
+  stepTotEl.textContent = arr.length;
+  stepTitle.textContent = step.title;
+  stepDesc.innerHTML = step.desc;
+  isoBox.innerHTML = "";
+  (step.iso||[]).forEach(([k,v])=>{
+    const c = document.createElement("div"); c.className="card";
+    const kk = document.createElement("div"); kk.className="k"; kk.textContent=k;
+    const vv = document.createElement("div"); vv.className="v"; vv.innerHTML=v;
+    c.appendChild(kk); c.appendChild(vv); isoBox.appendChild(c);
+  });
+  let s = st({});
+  for(let i=0;i<=idx;i++){ s = arr[i].apply(s); }
+  renderCarbons(s);
+  updateFormulas(s);
+  clearHighlights();
+  setVisibility();
+  (step.active.nodes||[]).forEach(id=>{const e=document.getElementById("node_"+id); if(e) e.classList.add("cur");});
+  (step.active.arrows||[]).forEach(id=>{const e=document.getElementById("arr_"+id); if(e) e.classList.add("active");});
+  ['co2_pdh','co2_idh','co2_akgdh'].forEach(id=>{
+    const e = document.getElementById(id);
+    if(e) e.style.display = (step.co2||[]).includes(id) ? "" : "none";
+  });
+  bar.style.width = ((idx+1)/arr.length*100)+"%";
+  strip.innerHTML="";
+  for(let i=0;i<arr.length;i++){
+    const p=document.createElement("div"); p.className="p"+(i<idx?" done":"")+(i===idx?" cur":"");
+    p.title = arr[i].title;
+    p.onclick = ()=>{ idx=i; stop(); renderStep(); };
+    strip.appendChild(p);
+  }
+  prevBtn.disabled = idx===0;
+  nextBtn.disabled = idx===arr.length-1;
+}
+
+function start(){
+  if(timer) return;
+  playing=true; playBtn.textContent="⏸ Pause";
+  const ms = parseInt(speedSel.value,10);
+  timer = setInterval(()=>{
+    if(idx<steps().length-1){ idx++; renderStep(); }
+    else stop();
+  }, ms);
+}
+function stop(){ playing=false; playBtn.textContent="▶ Play"; if(timer){clearInterval(timer); timer=null;} }
+
+prevBtn.onclick = ()=>{ stop(); if(idx>0){idx--; renderStep();} };
+nextBtn.onclick = ()=>{ stop(); if(idx<steps().length-1){idx++; renderStep();} };
+playBtn.onclick = ()=>{ playing?stop():start(); };
+resetBtn.onclick = ()=>{ stop(); idx=0; renderStep(); };
+speedSel.onchange = ()=>{ if(playing){ stop(); start(); } };
+
+function setMode(m){
+  mode=m; idx=0; stop();
+  modeOx.classList.toggle("active", m==="ox");
+  modeTum.classList.toggle("active", m==="tum");
+  renderStep();
+  renderInsight();
+}
+modeOx.onclick = ()=>setMode("ox");
+modeTum.onclick = ()=>setMode("tum");
+
+function renderInsight(){
+  if(mode==="ox"){
+    insightBody.innerHTML = `
+      <p>In <b>oxidative mode</b> the cycle runs clockwise from acetyl-CoA. The two carbons that entered as acetyl-CoA are <b>not</b> released in the same turn — they survive through citrate → α-KG → succinate, and only exit as CO₂ on the <i>second</i> turn. This is why <b>first-turn M+5 citrate</b> (M+3 OAA + M+2 AcCoA) is the cleanest readout of glucose-derived TCA entry.</p>
+      <div class="grid">
+        <div class="cell"><div class="h">Diagnostic isotopologue</div><div class="t">Citrate <b>M+5</b> after ¹³C₆-glucose = glucose carbons entering the TCA via PDH. M+5/M+6 ratio indexes PDH vs PC contribution.</div></div>
+        <div class="cell"><div class="h">Why the CO₂ is ¹³C in turn 1</div><div class="t">First decarboxylation (IDH) targets the carbon derived from OAA — which was ¹³C-labeled via PC — so the exhaled CO₂ carries the tracer.</div></div>
+        <div class="cell"><div class="h">Clinical relevance</div><div class="t">Loss of the M+5 citrate signal, or accumulation of M+5 from glutamine, is exactly what flips when a tumor switches to reductive carboxylation → see tumor mode.</div></div>
+      </div>`;
+  } else {
+    insightBody.innerHTML = `
+      <p>Tumors under hypoxia, HIF1α, or with <b>IDH1/2 mutations</b>, run the TCA <i>backwards</i> from α-KG to citrate. The signature is <b>glutamine-derived M+5 citrate</b>, an isotopologue essentially invisible in normal tissue. The biological payoff: tumors convert glutamine carbon into cytosolic acetyl-CoA for membrane lipid synthesis while diverting glucose to lactate.</p>
+      <div class="grid">
+        <div class="cell"><div class="h">The hallmark: M+5 citrate from ¹³C₅-Gln</div><div class="t">Citrate <b>M+5</b> from ¹³C₅-glutamine (not ¹³C₆-glucose) is the textbook biomarker of reductive carboxylation, first reported by Metallo &amp; Vander Heiden in hypoxic cells and in IDH-mutant glioma.</div></div>
+        <div class="cell"><div class="h">Druggable nodes</div><div class="t"><b>GLS</b> (CB-839 / telaglenastat), <b>IDH1/2 mutants</b> (ivosidenib, enasidenib — allosteric inhibitors), <b>ACLY</b>, and the <b>HIF1α / PDK1</b> axis.</div></div>
+        <div class="cell"><div class="h">What you measure in clinic</div><div class="t">Infuse ¹³C₅-glutamine, sample tumor by GC-MS / LC-HRMS, and look for M+5 citrate / M+2 acetyl-carnitine. The fraction of M+5 tracks reverse-IDH flux and predicts response to GLS inhibition.</div></div>
+      </div>`;
+  }
+}
+
+setMode("ox");
+renderStep();
+</script>
+</body>
+</html>

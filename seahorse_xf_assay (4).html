@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Seahorse XF Assay — Cancer vs Mitochondrial-Disease Cell</title>
+<style>
+  :root{
+    --bg:#eef2f8; --canvas:#ffffff; --panel:#ffffff; --panel2:#f4f7fc;
+    --ink:#15233b; --body:#3a4a66; --muted:#6b7a92; --line:#d6deea; --line2:#c2cde0;
+    --ecar:#0c9a6a; --ecar-lt:#7fd3b5;
+    --ocr:#1d6fd6; --ocr-lt:#7faee8;
+    --hl:#d98324; --hl-bg:#fff1d6;
+    --warn:#c0392b;
+    --mut:#7a3aa8;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--bg);color:var(--ink);font-family:"Inter","Helvetica Neue",Arial,sans-serif;-webkit-font-smoothing:antialiased;line-height:1.5}
+  .wrap{max-width:1380px;margin:0 auto;padding:22px 24px 60px}
+  header{display:flex;flex-wrap:wrap;align-items:center;gap:18px;justify-content:space-between}
+  h1{font-size:21px;font-weight:800;margin:0}
+  h1 .sub{display:block;font-weight:500;color:var(--muted);font-size:13.5px;margin-top:4px}
+
+  .modelsel{display:flex;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:5px;gap:4px;box-shadow:0 1px 3px rgba(20,35,59,.06)}
+  .modelsel button{
+    background:transparent;color:var(--muted);border:0;cursor:pointer;
+    padding:9px 14px;border-radius:9px;font-size:13px;font-weight:700;
+    display:flex;flex-direction:column;align-items:flex-start;line-height:1.15;text-align:left;
+  }
+  .modelsel button small{font-weight:500;font-size:10.5px;color:var(--muted);margin-top:3px}
+  .modelsel button.active{background:var(--ink);color:#fff;box-shadow:0 2px 6px rgba(20,35,59,.18)}
+  .modelsel button.active small{color:#ffd49a}
+  .modelsel button.active.cancer{background:#1d6fd6}
+  .modelsel button.active.cancer small{color:#cfe5ff}
+  .modelsel button.active.disease{background:#7a3aa8}
+  .modelsel button.active.disease small{color:#e8d5ff}
+
+  .stage{display:grid;grid-template-columns:1fr 380px;gap:18px;margin-top:20px}
+  @media(max-width:1080px){.stage{grid-template-columns:1fr}}
+  .canvas{background:var(--canvas);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:0 2px 8px rgba(20,35,59,.06)}
+  .canvas svg{width:100%;height:auto;display:block}
+  .chart-title{font-size:15px;font-weight:800;color:var(--ink);margin:0 0 4px}
+  .chart-sub{font-size:12px;color:var(--muted);margin:0 0 12px}
+
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px;display:flex;flex-direction:column;gap:16px;box-shadow:0 2px 8px rgba(20,35,59,.06)}
+  .panel h2{margin:0;font-size:12px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);font-weight:700}
+  .phase-name{font-size:18px;font-weight:800;color:var(--ink);margin:0 0 4px;line-height:1.22}
+  .phase-desc{font-size:13px;line-height:1.55;color:var(--body);margin:0}
+  .phase-desc b{color:var(--ink);background:linear-gradient(180deg,transparent 60%,var(--hl-bg) 60%);padding:0 2px}
+
+  .readout{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .readout .r{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:9px 11px}
+  .readout .r .k{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;font-weight:600;line-height:1.2}
+  .readout .r .v{font-size:16px;font-weight:800;margin-top:4px;font-variant-numeric:tabular-nums}
+  .readout .r .v .u{font-size:10.5px;font-weight:600;color:var(--muted);margin-left:2px}
+  .readout .r.ecar .v{color:var(--ecar)}
+  .readout .r.ocr .v{color:var(--ocr)}
+  .readout .r.calc .v{color:var(--ink)}
+  .readout .r.locked{opacity:.35}
+  .readout .r.live{box-shadow:0 0 0 2px var(--hl-bg)}
+  .readout .r.flag{background:#fdeaea;border-color:#f3c4be}
+  .readout .r.flag .v{color:var(--warn)}
+
+  .controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px}
+  .btn{background:var(--panel2);color:var(--ink);border:1px solid var(--line2);border-radius:10px;padding:10px 16px;font-size:14px;font-weight:700;cursor:pointer}
+  .btn:hover{border-color:var(--ink);background:#eaeef6}
+  .btn.primary{background:var(--ink);border-color:var(--ink);color:#fff}
+  .btn.primary:hover{background:#223352}
+  .btn[disabled]{opacity:.4;cursor:not-allowed}
+  .speed{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:13px;font-weight:600}
+  .speed select{background:var(--panel2);color:var(--ink);border:1px solid var(--line2);border-radius:8px;padding:7px 9px;font-weight:600}
+
+  .progress{height:8px;background:#e6ecf5;border-radius:99px;overflow:hidden;margin-top:8px}
+  .progress > i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--ecar),var(--ocr));transition:width .15s linear}
+  .timeline{display:flex;gap:4px;margin-top:10px}
+  .timeline .seg{flex:1;height:26px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;cursor:pointer;border:1px solid transparent;padding:0 4px;text-align:center;line-height:1.1}
+  .timeline .seg.b{background:#6b7a92}
+  .timeline .seg.o{background:var(--hl)}
+  .timeline .seg.d{background:var(--warn)}
+  .timeline .seg.g{background:#7a3aa8}
+  .timeline .seg.cur{outline:3px solid var(--ink);outline-offset:1px}
+
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--body);margin-top:12px;font-weight:600}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+  .dot{width:14px;height:14px;border-radius:50%;display:inline-block}
+  .dot.ec{background:var(--ecar)}
+  .dot.oc{background:var(--ocr)}
+  .dot.inj{background:var(--hl)}
+
+  .insight{background:linear-gradient(180deg,#fbf5ff,#f4ecff);border:1px solid #d8c2f0;border-radius:16px;padding:20px 22px;margin-top:18px}
+  .insight h2{color:#6a2a9e;margin:0 0 10px;font-size:14px;letter-spacing:.4px;text-transform:uppercase;font-weight:800}
+  .insight p{font-size:14px;line-height:1.65;color:var(--body);margin:8px 0}
+  .insight p b{color:var(--ink)}
+  .insight .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:14px}
+  @media(max-width:800px){.insight .grid{grid-template-columns:1fr}}
+  .insight .cell{background:#fff;border:1px solid #e0d2f5;border-radius:12px;padding:14px 15px}
+  .insight .cell .h{font-size:13px;color:#6a2a9e;font-weight:800;margin-bottom:6px}
+  .insight .cell .t{font-size:13px;color:var(--body);line-height:1.55}
+  .insight .cell .t b{color:var(--ink)}
+
+  .compare{background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px 20px;margin-top:18px;box-shadow:0 2px 8px rgba(20,35,59,.06)}
+  .compare h2{margin:0 0 12px;font-size:14px;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);font-weight:800}
+  .compare table{width:100%;border-collapse:collapse;font-size:13px}
+  .compare th,.compare td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--line)}
+  .compare th{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700}
+  .compare td.num{font-variant-numeric:tabular-nums;font-weight:700;text-align:right}
+  .compare td.flag{color:var(--warn);font-weight:700}
+  .compare tr:last-child td{border-bottom:0}
+
+  footer{color:var(--muted);font-size:13px;margin-top:22px;line-height:1.65}
+  footer b{color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Seahorse XF Assay — Cancer vs Mitochondrial-Disease Cell
+      <span class="sub">Real-time ECAR &amp; OCR under oligomycin, 2-DG, and galactose challenge</span>
+    </h1>
+    <div class="modelsel" id="modelsel" role="tablist">
+      <button id="modelCancer" class="active cancer" role="tab">
+        A549 cancer
+        <small>Warburg · high reserve</small>
+      </button>
+      <button id="modelDisease" role="tab">
+        CI-deficient fibroblast
+        <small>patient · no spare capacity</small>
+      </button>
+    </div>
+  </header>
+
+  <div class="stage">
+    <div class="canvas">
+      <div style="display:grid;grid-template-columns:1.55fr 1fr;gap:18px;align-items:start">
+        <div>
+          <p class="chart-title">Extracellular flux — ECAR &amp; OCR vs time</p>
+          <p class="chart-sub" id="chartSub">Click any timeline segment below to jump to that phase.</p>
+          <svg id="chart" viewBox="0 0 820 500" xmlns="http://www.w3.org/2000/svg"></svg>
+        </div>
+        <div>
+          <p class="chart-title">Live single-cell view</p>
+          <p class="chart-sub">Flux arrows scale with current rates; mitochondria glow ∝ OCR.</p>
+          <svg id="cell" viewBox="0 0 400 500" xmlns="http://www.w3.org/2000/svg"></svg>
+        </div>
+      </div>
+      <div class="legend">
+        <span><i class="dot ec"></i> ECAR (extracellular acidification · glycolysis)</span>
+        <span><i class="dot oc"></i> OCR (O₂ consumption · OXPHOS)</span>
+        <span><i class="dot inj"></i> injection / medium exchange</span>
+      </div>
+      <div class="timeline" id="timeline"></div>
+    </div>
+
+    <div class="panel">
+      <div>
+        <h2>Phase <span id="phIdx">1</span> / 4 · <span id="tNow">0.0</span> min</h2>
+        <div class="progress"><i id="bar"></i></div>
+      </div>
+      <div>
+        <div class="phase-name" id="phaseName">Loading…</div>
+        <p class="phase-desc" id="phaseDesc"></p>
+      </div>
+      <div class="readout" id="readout"></div>
+      <div class="controls">
+        <button class="btn" id="prev">◀ Back</button>
+        <button class="btn primary" id="play">▶ Play</button>
+        <button class="btn" id="next">Next ▶</button>
+        <button class="btn" id="reset">↺ Reset</button>
+        <div class="speed">Speed
+          <select id="speed">
+            <option value="220">0.5×</option>
+            <option value="110" selected>1×</option>
+            <option value="55">2×</option>
+            <option value="22">5×</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="insight" id="insightBox">
+    <h2 id="insightTitle">How to read this assay</h2>
+    <div id="insightBody"></div>
+  </div>
+
+  <div class="compare">
+    <h2>Side-by-side parameter comparison</h2>
+    <table id="compareTable">
+      <thead><tr><th>Parameter</th><th style="text-align:right">A549 cancer</th><th style="text-align:right">CI-deficient fibroblast</th><th>Interpretation</th></tr></thead>
+      <tbody id="compareBody"></tbody>
+    </table>
+  </div>
+
+  <footer>
+    ECAR (extracellular acidification rate, mpH/min) reports glycolytic lactate + proton efflux; OCR (O₂ consumption rate, pmol/min) reports mitochondrial electron transport. <b>Oligomycin</b> inhibits ATP synthase (Complex V) — OCR collapses to the proton-leak floor and ECAR climbs as the cell shunts pyruvate to lactate. <b>2-deoxyglucose</b> blocks hexokinase, starving glycolysis. <b>Galactose medium</b> (no glucose) forces OXPHOS via the Leloir pathway, unmasking spare respiratory capacity — or, in mitochondrial disease, revealing its absence. Parameters derived as in Agilent Seahorse Wave / XF reports.
+  </footer>
+</div>
+
+<script>
+/* ============================================================
+   SEAHORSE XF ASSAY — TWO CELL MODELS
+   ============================================================
+   Both assays run 60 min, 4 phases of 15 min:
+     1. Basal         (glucose medium, no drug)
+     2. + Oligomycin  (ATP synthase inhibitor)
+     3. + 2-DG         (hexokinase inhibitor, glycolysis blocked)
+     4. Galactose med  (medium swap, forces OXPHOS)
+
+   MODEL A — A549 lung carcinoma (Warburg):
+     High basal glycolysis, substantial glycolytic reserve, real spare
+     respiratory capacity (galactose pushes OCR ABOVE basal).
+
+   MODEL B — Complex I-deficient patient fibroblast (CI disease):
+     Compensatory glycolysis at basal (ECAR high, OCR low).
+     Oligomycin: tiny ATP-linked drop (mito already failing), ECAR
+       cannot rise much further → glycolytic reserve ~0 (already at ceiling).
+     2-DG: ECAR crashes (still glycolysis-dependent).
+     Galactose: CATASTROPHIC — OCR cannot rise (no spare capacity,
+       Complex I bottleneck), cell viability threatened. This is the
+       clinical "galactose sensitivity" hallmark of mitochondrial disease.
+   ============================================================ */
+
+const MODELS = {
+  cancer: {
+    name:"A549 lung carcinoma",
+    tagline:"Warburg metabolism · 40k cells/well · DMEM + 10 mM glucose",
+    color:"#1d6fd6",
+    eMax:90, oMax:200,   // chart axis limits
+    eScale:75, oScale:180,  // for cell-viz arrow scaling
+    phases:[
+      { name:"Basal respiration (glucose medium)",
+        t0:0, t1:15, kind:"b", drug:null,
+        ecar_target:30, ocr_target:120,
+        desc:"Cancer cells equilibrate in glucose medium. <b>Basal ECAR</b> (~30) reflects constitutive glycolytic flux — the Warburg baseline. <b>Basal OCR</b> (~120) reflects steady-state OXPHOS. The cell meets its ATP demand with a mix of both; the ECAR/OCR ratio is a first read on its bioenergetic phenotype." },
+      { name:"Oligomycin — ATP synthase blocked",
+        t0:15, t1:30, kind:"o", drug:"Oligomycin 1.5 µM",
+        ecar_target:72, ocr_target:42,
+        desc:"Oligomycin inhibits <b>Complex V (ATP synthase)</b>. OCR collapses to the <b>proton-leak floor</b> (~42, ~35% of basal) — residual non-ATP-linked respiration. To defend ATP, the cell shunts pyruvate to lactate: <b>ECAR climbs to glycolytic capacity</b> (~72). The jump above basal is the <b>glycolytic reserve</b>." },
+      { name:"2-Deoxyglucose — glycolysis blocked",
+        t0:30, t1:45, kind:"d", drug:"2-DG 50 mM",
+        ecar_target:6, ocr_target:36,
+        desc:"2-DG is phosphorylated by hexokinase but cannot proceed downstream, trapping G6P and starving glycolysis. <b>ECAR crashes to non-glycolytic acidification</b> (~6) — residual CO₂-derived protons. The drop from capacity defines <b>glycolytic capacity</b>. OCR dips slightly (~36) as cytosolic ATP supply tightens." },
+      { name:"Galactose medium — OXPHOS forced",
+        t0:45, t1:60, kind:"g", drug:"Swap → galactose medium",
+        ecar_target:9, ocr_target:152,
+        desc:"Medium exchanged for <b>galactose</b> (no glucose). Galactose enters the Leloir pathway → UDP-glucose → G1P, generating pyruvate with <i>no net cytosolic ATP</i>. The cell must rely on OXPHOS. <b>OCR rises above basal</b> (~152) — revealing <b>spare respiratory capacity</b> that was unused in glucose." },
+    ]
+  },
+  disease: {
+    name:"Complex I-deficient fibroblast",
+    tagline:"Patient skin fibroblast · MT-ND1 m.3460G>A · 50k cells/well",
+    color:"#7a3aa8",
+    eMax:90, oMax:120,   // lower OCR axis — disease cells respire less
+    eScale:75, oScale:120,
+    phases:[
+      { name:"Basal respiration (glucose medium)",
+        t0:0, t1:15, kind:"b", drug:null,
+        ecar_target:58, ocr_target:38,
+        desc:"Patient fibroblasts equilibrate in glucose. <b>Basal ECAR is already elevated</b> (~58) — the cell compensates for defective Complex I by upregulating glycolysis (a Warburg-like shift). <b>Basal OCR is low</b> (~38) because NADH oxidation is bottlenecked at Complex I. Note the high ECAR/OCR ratio: this cell is glycolysis-dependent even before any drug." },
+      { name:"Oligomycin — ATP synthase blocked",
+        t0:15, t1:30, kind:"o", drug:"Oligomycin 1.5 µM",
+        ecar_target:62, ocr_target:28,
+        desc:"OCR drops only <b>10 pmol/min</b> (~26% of basal) — a small ATP-linked component, because Complex I flux was already limiting. More tellingly, <b>ECAR barely rises</b> (58→62): glycolysis was already near its ceiling, so there is <b>almost no glycolytic reserve</b>. Compare to the A549 cell, which doubled ECAR here." },
+      { name:"2-Deoxyglucose — glycolysis blocked",
+        t0:30, t1:45, kind:"d", drug:"2-DG 50 mM",
+        ecar_target:7, ocr_target:22,
+        desc:"ECAR collapses to non-glycolytic acidification (~7), confirming the basal signal was indeed glycolytic. OCR falls further (~22) — with glycolysis gone and Complex I compromised, the cell cannot defend mitochondrial ATP. This is the bioenergetic crisis the disease cell lives one step away from." },
+      { name:"Galactose medium — OXPHOS forced · crisis",
+        t0:45, t1:60, kind:"g", drug:"Swap → galactose medium",
+        ecar_target:8, ocr_target:18,
+        desc:"<b>This is the diagnostic moment.</b> Without glucose, the cell must run OXPHOS — but Complex I cannot deliver. <b>OCR does NOT rise; it falls further</b> (~18). There is <b>negative spare capacity</b>. Clinically this is <b>galactose sensitivity</b>: patient fibroblasts die in galactose medium while healthy cells thrive. This assay is used diagnostically for suspected mitochondrial disease." },
+    ]
+  }
+};
+
+const T_TOTAL = 60;
+const DT = 0.25;
+const N_POINTS = Math.round(T_TOTAL/DT) + 1;
+const TAU = 3.0;
+
+let curModel = "cancer";
+let DATA = [];
+let PHASES = MODELS[curModel].phases;
+
+// regenerate the full curve for the active model
+function buildData(){
+  DATA = [];
+  const m = MODELS[curModel];
+  let prevE = m.phases[0].ecar_target;
+  let prevO = m.phases[0].ocr_target;
+  for(let i=0;i<N_POINTS;i++){
+    const t = i*DT;
+    const ph = PHASES.find(p => t>=p.t0 && t<p.t1) || PHASES[PHASES.length-1];
+    const dt = Math.max(0, t - ph.t0);
+    let e = prevE + (ph.ecar_target - prevE) * (1 - Math.exp(-dt/TAU));
+    let o = prevO + (ph.ocr_target - prevO) * (1 - Math.exp(-dt/TAU));
+    // deterministic biological noise (stable on replay)
+    const s1 = Math.sin(t*12.9898)*43758.5453;
+    const n1 = (s1 - Math.floor(s1) - 0.5);
+    const s2 = Math.sin(t*78.233)*43758.5453;
+    const n2 = (s2 - Math.floor(s2) - 0.5);
+    e += n1 * 1.4;
+    o += n2 * (curModel==="disease" ? 1.3 : 2.2);  // disease cells are noisier-per-relative-basis? actually calmer; keep modest
+    DATA.push({t, e, o});
+    prevE = e; prevO = o;
+  }
+}
+function rateAt(t){
+  if(t<=0) return {e:DATA[0].e, o:DATA[0].o};
+  if(t>=T_TOTAL) {const d=DATA[DATA.length-1]; return {e:d.e,o:d.o};}
+  const i = t/DT;
+  const i0 = Math.floor(i), i1 = Math.min(N_POINTS-1, i0+1);
+  const f = i - i0;
+  return { e: DATA[i0].e + (DATA[i1].e - DATA[i0].e)*f,
+           o: DATA[i0].o + (DATA[i1].o - DATA[i0].o)*f };
+}
+function phaseAvg(phIdx, key){
+  const ph = PHASES[phIdx];
+  let sum=0,n=0;
+  for(let i=0;i<N_POINTS;i++){
+    const d=DATA[i];
+    if(d.t>=ph.t1-2 && d.t<ph.t1){ sum+=d[key]; n++; }
+  }
+  return n? sum/n : 0;
+}
+
+/* ============================================================
+   CHART (dual-axis line chart) — widened to avoid label clipping
+   ============================================================ */
+const chart = document.getElementById("chart");
+const SVGNS = "http://www.w3.org/2000/svg";
+function el(tag, attrs){ const e=document.createElementNS(SVGNS,tag); if(attrs) for(const k in attrs) e.setAttribute(k,attrs[k]); return e; }
+
+// plot region with generous left/right padding for axis labels
+const CHART = { x0:70, y0:55, w:680, h:380, tMax:60 };
+let eMin=0, eMax=90, oMin=0, oMax=200;
+const plotR = { x:CHART.x0, y:CHART.y0, w:CHART.w, h:CHART.h };
+function xOf(t){ return plotR.x + (t/CHART.tMax)*plotR.w; }
+function yOfE(e){ return plotR.y + plotR.h - (e-eMin)/(eMax-eMin)*plotR.h; }
+function yOfO(o){ return plotR.y + plotR.h - (o-oMin)/(oMax-oMin)*plotR.h; }
+
+function buildChartFrame(){
+  chart.innerHTML = "";
+  const m = MODELS[curModel];
+  eMax = m.eMax; oMax = m.oMax;
+  // plot background
+  chart.appendChild(el("rect",{x:plotR.x,y:plotR.y,width:plotR.w,height:plotR.h,fill:"#fafcff",stroke:"#d6deea","stroke-width":1}));
+
+  // vertical gridlines + x ticks (every 15 min)
+  for(let t=0;t<=60;t+=15){
+    const x=xOf(t);
+    chart.appendChild(el("line",{x1:x,y1:plotR.y,x2:x,y2:plotR.y+plotR.h,stroke:"#eaeff7","stroke-width":1}));
+    const tx=el("text",{x:x,y:plotR.y+plotR.h+20,"text-anchor":"middle",fill:"#6b7a92","font-size":11,"font-weight":600});
+    tx.textContent = t+"";
+    chart.appendChild(tx);
+  }
+  // X axis title
+  const xt=el("text",{x:plotR.x+plotR.w/2,y:plotR.y+plotR.h+44,"text-anchor":"middle",fill:"#3a4a66","font-size":12,"font-weight":700});
+  xt.textContent="Time (min)";
+  chart.appendChild(xt);
+
+  // ECAR left axis (green) — ticks 0,30,60,90
+  const eStep = Math.round(eMax/3);
+  for(let e=0;e<=eMax;e+=eStep){
+    const y=yOfE(e);
+    chart.appendChild(el("line",{x1:plotR.x,y1:y,x2:plotR.x+plotR.w,y2:y,stroke:"#eef3fa","stroke-width":1}));
+    const tk=el("text",{x:plotR.x-10,y:y+4,"text-anchor":"end",fill:"#0c9a6a","font-size":11,"font-weight":700});
+    tk.textContent=e+"";
+    chart.appendChild(tk);
+  }
+  // ECAR axis title (stacked: "ECAR" / "mpH/min") at top-left of plot
+  chart.appendChild(el("text",{x:plotR.x-10,y:plotR.y-22,"text-anchor":"end",fill:"#0c9a6a","font-size":13,"font-weight":800})).textContent="ECAR";
+  chart.appendChild(el("text",{x:plotR.x-10,y:plotR.y-8,"text-anchor":"end",fill:"#0c9a6a","font-size":10,"font-weight":600})).textContent="mpH/min";
+
+  // OCR right axis (blue) — ticks 0,50,100,...
+  const oStep = Math.round(oMax/4);
+  for(let o=0;o<=oMax;o+=oStep){
+    const y=yOfO(o);
+    const tk=el("text",{x:plotR.x+plotR.w+10,y:y+4,"text-anchor":"start",fill:"#1d6fd6","font-size":11,"font-weight":700});
+    tk.textContent=o+"";
+    chart.appendChild(tk);
+  }
+  // OCR axis title at top-right of plot
+  chart.appendChild(el("text",{x:plotR.x+plotR.w+10,y:plotR.y-22,"text-anchor":"start",fill:"#1d6fd6","font-size":13,"font-weight":800})).textContent="OCR";
+  chart.appendChild(el("text",{x:plotR.x+plotR.w+10,y:plotR.y-8,"text-anchor":"start",fill:"#1d6fd6","font-size":10,"font-weight":600})).textContent="pmol/min";
+
+  // injection markers — labels placed in the top margin (above the plot) to avoid overlapping curves
+  PHASES.slice(1).forEach((ph)=>{
+    const x=xOf(ph.t0);
+    chart.appendChild(el("line",{x1:x,y1:plotR.y,x2:x,y2:plotR.y+plotR.h,stroke:"#d98324","stroke-width":1.5,"stroke-dasharray":"5 4",opacity:.7}));
+    // small triangle marker at top of plot
+    chart.appendChild(el("path",{d:`M ${x-4} ${plotR.y-3} L ${x+4} ${plotR.y-3} L ${x} ${plotR.y+4} z`,fill:"#d98324"}));
+  });
+
+  // re-add curve paths & live elements (they were wiped by innerHTML="")
+  chart.appendChild(ecarPath); chart.appendChild(ocrPath);
+  chart.appendChild(eDot); chart.appendChild(oDot);
+  chart.appendChild(cursor);
+}
+
+const ecarPath = el("path",{id:"ecarCurve",fill:"none",stroke:"#0c9a6a","stroke-width":2.8,"stroke-linejoin":"round","stroke-linecap":"round"});
+const ocrPath  = el("path",{id:"ocrCurve",fill:"none",stroke:"#1d6fd6","stroke-width":2.8,"stroke-linejoin":"round","stroke-linecap":"round"});
+const eDot = el("circle",{id:"eDot",r:5,fill:"#0c9a6a",stroke:"#fff","stroke-width":2});
+const oDot = el("circle",{id:"oDot",r:5,fill:"#1d6fd6",stroke:"#fff","stroke-width":2});
+const cursor = el("line",{id:"cursor",x1:0,y1:plotR.y,x2:0,y2:plotR.y+plotR.h,stroke:"#15233b","stroke-width":1,"stroke-dasharray":"3 3",opacity:.4});
+
+function reveal(t){
+  let pe=[], po=[];
+  for(let i=0;i<N_POINTS;i++){
+    const d=DATA[i];
+    if(d.t>t) break;
+    pe.push((i===0?"M":"L")+" "+xOf(d.t).toFixed(1)+" "+yOfE(d.e).toFixed(1));
+    po.push((i===0?"M":"L")+" "+xOf(d.t).toFixed(1)+" "+yOfO(d.o).toFixed(1));
+  }
+  ecarPath.setAttribute("d", pe.join(" "));
+  ocrPath.setAttribute("d", po.join(" "));
+  const r = rateAt(t);
+  eDot.setAttribute("cx", xOf(t)); eDot.setAttribute("cy", yOfE(r.e));
+  oDot.setAttribute("cx", xOf(t)); oDot.setAttribute("cy", yOfO(r.o));
+  cursor.setAttribute("x1", xOf(t)); cursor.setAttribute("x2", xOf(t));
+}
+
+/* ============================================================
+   CELL VISUALIZATION — relayouted to avoid overlaps
+   ============================================================ */
+const cell = document.getElementById("cell");
+const CV = { cx:200, cy:235, r:108 };   // smaller cell → generous side margin for flux arrows
+
+function buildCellFrame(){
+  cell.innerHTML = "";
+  // defs with arrowhead markers
+  const def = el("defs");
+  def.innerHTML =
+    '<marker id="cellArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#3a4a66"/></marker>' +
+    '<marker id="cellArrowG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0c9a6a"/></marker>' +
+    '<marker id="cellArrowB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1d6fd6"/></marker>';
+  cell.appendChild(def);
+
+  cell.appendChild(el("rect",{x:0,y:0,width:400,height:500,fill:"#fafcff"}));
+
+  // quadrant headers — placed in the four corners OUTSIDE the cell circle
+  // top-left: substrate in
+  cell.appendChild(textEl(30, 38, "Substrate in", "#3a4a66", 12, 800, "start"));
+  // top-right: lactate out
+  cell.appendChild(textEl(370, 38, "Lactate / H⁺ out", "#0c9a6a", 12, 800, "end"));
+  // bottom-left: O2 in  (so the O2 arrow comes from top, but its LABEL is at bottom-left to avoid the curve)
+  // We'll keep O2 in at top-center, CO2 out at bottom-center
+  cell.appendChild(textEl(200, 18, "O₂ in", "#1d6fd6", 12, 800, "middle"));
+  cell.appendChild(textEl(200, 492, "CO₂ out", "#6b7a92", 12, 800, "middle"));
+
+  // cell membrane + glow
+  cell.appendChild(el("circle",{cx:CV.cx,cy:CV.cy,r:CV.r+8,fill:"none",stroke:"#d6deea","stroke-width":1,opacity:.5}));
+  cell.appendChild(el("circle",{cx:CV.cx,cy:CV.cy,r:CV.r,fill:"#f4f7fc",stroke:"#b8c5db","stroke-width":2}));
+  // nucleus (offset left)
+  cell.appendChild(el("circle",{cx:CV.cx-35,cy:CV.cy-25,r:38,fill:"#e6ecf5",stroke:"#b8c5db","stroke-width":1.5}));
+  cell.appendChild(textEl(CV.cx-35, CV.cy-20, "nucleus", "#8a98b3", 9.5, 700, "middle"));
+
+  // mitochondria — placed in the RIGHT half of the cell, away from nucleus
+  const mitoG = el("g",{id:"mitoG"});
+  const mitoPos = [
+    {x:CV.cx+45, y:CV.cy-45, r:20, rot:-20},
+    {x:CV.cx+65, y:CV.cy+25, r:18, rot:30},
+    {x:CV.cx+15, y:CV.cy+55, r:17, rot:0},
+    {x:CV.cx-50, y:CV.cy+45, r:16, rot:45},
+  ];
+  mitoPos.forEach((m,i)=>{
+    const g=el("g",{transform:`translate(${m.x},${m.y}) rotate(${m.rot})`});
+    g.appendChild(el("ellipse",{rx:m.r+5,ry:m.r*0.55+3,fill:"#1d6fd6",opacity:.10,id:"mitoGlow_"+i}));
+    g.appendChild(el("ellipse",{rx:m.r,ry:m.r*0.5,fill:"#bcd6f3",stroke:"#5a8ec6","stroke-width":1.5,id:"mito_"+i}));
+    for(let c=-1;c<=1;c++){
+      g.appendChild(el("line",{x1:c*5,y1:-m.r*0.4,x2:c*5,y2:m.r*0.4,stroke:"#5a8ec6","stroke-width":1}));
+    }
+    mitoG.appendChild(g);
+  });
+  cell.appendChild(mitoG);
+
+  // flux arrow groups (rebuilt each frame)
+  cell.appendChild(el("g",{id:"subArrow"}));
+  cell.appendChild(el("g",{id:"lacArrow"}));
+  cell.appendChild(el("g",{id:"o2Arrow"}));
+  cell.appendChild(el("g",{id:"co2Arrow"}));
+
+  // drug banner at very bottom — now BELOW the CO2 arrow's max reach
+  cell.appendChild(el("g",{id:"drugBanner"}));
+}
+function textEl(x,y,txt,fill,size,weight,anchor){
+  const t=el("text",{x:x,y:y,fill:fill,"font-size":size,"font-weight":weight,"text-anchor":anchor});
+  t.textContent=txt;
+  return t;
+}
+
+function updateCell(t, r){
+  const m = MODELS[curModel];
+  const phIdx = PHASES.findIndex(p => t>=p.t0 && t<p.t1);
+  const ph = phIdx>=0 ? PHASES[phIdx] : PHASES[PHASES.length-1];
+
+  // substrate: glucose (basal/oligo), 2-DG blocked, galactose
+  let subRate, subLabel, subColor, subMarker;
+  if(ph.kind==="b"||ph.kind==="o"){ subRate=1.0; subLabel="Glucose"; subColor="#3a4a66"; subMarker="url(#cellArrow)"; }
+  else if(ph.kind==="d"){ subRate=0.08; subLabel="2-DG (blocked)"; subColor="#c0392b"; subMarker="url(#cellArrow)"; }
+  else { subRate=0.7; subLabel="Galactose"; subColor="#7a3aa8"; subMarker="url(#cellArrow)"; }
+
+  const lacRate = Math.min(1, r.e/m.eScale);
+  const o2Rate  = Math.min(1, r.o/m.oScale);
+  const co2Rate = Math.min(1, r.o/m.oScale);
+
+  // substrate arrow (left → into cell). Only the substrate NAME sits above the arrow;
+  // the rate value is shown on the lactate (output) side, where ECAR is actually measured.
+  const sa = document.getElementById("subArrow");
+  sa.innerHTML = "";
+  const ax1=10, ay1=CV.cy, ax2=CV.cx-CV.r-8, ay2=CV.cy;
+  const subMidX = (ax1+ax2)/2;
+  const sw = 1 + subRate*5;
+  sa.appendChild(el("path",{d:`M ${ax1} ${ay1} L ${ax2} ${ay2}`,stroke:subColor,"stroke-width":sw,fill:"none","stroke-linecap":"round",opacity:0.35+subRate*0.65,"marker-end":subMarker}));
+  // label well above the arrow (clear gap from the up-to-6px stroke)
+  sa.appendChild(textEl(subMidX, CV.cy-24, subLabel, subColor, 11.5, 800, "middle"));
+
+  // lactate arrow (cell → right). Length capped so arrow stays inside viewBox (400).
+  const la = document.getElementById("lacArrow");
+  la.innerHTML = "";
+  const lacLen = 25 + lacRate*40;   // 25..65 px
+  const lx1=CV.cx+CV.r+8, ly1=CV.cy, lx2=lx1+lacLen, ly2=CV.cy;
+  const lacMidX = (lx1+lx2)/2;
+  la.appendChild(el("path",{d:`M ${lx1} ${ly1} L ${lx2} ${ly2}`,stroke:"#0c9a6a","stroke-width":1+lacRate*6,fill:"none","stroke-linecap":"round",opacity:0.35+lacRate*0.65,"marker-end":"url(#cellArrowG)"}));
+  // ECAR value ABOVE the arrow (clear gap from the up-to-7px stroke), centered over the arrow
+  la.appendChild(textEl(lacMidX, CV.cy-18, r.e.toFixed(0)+" mpH/min", "#0c9a6a", 10.5, 700, "middle"));
+
+  // O2 arrow (top-center → cell). Value label sits to the RIGHT of the arrow's top, in clear margin.
+  const oa = document.getElementById("o2Arrow");
+  oa.innerHTML = "";
+  const ox1=CV.cx, oy1=55, ox2=CV.cx, oy2=CV.cy-CV.r-8;
+  oa.appendChild(el("path",{d:`M ${ox1} ${oy1} L ${ox2} ${oy2}`,stroke:"#1d6fd6","stroke-width":1+o2Rate*6,fill:"none","stroke-linecap":"round",opacity:0.35+o2Rate*0.65,"marker-end":"url(#cellArrowB)"}));
+  // O2 value label just to the right of the arrow's top end (y~58), kept clear of the top-right header
+  oa.appendChild(textEl(ox1+14, oy1+10, r.o.toFixed(0)+" pmol/min", "#1d6fd6", 10.5, 700, "start"));
+
+  // CO2 arrow (cell → bottom). Label placed at bottom-right.
+  const ca = document.getElementById("co2Arrow");
+  ca.innerHTML = "";
+  const co2Len = 20 + co2Rate*35;
+  const cx1=CV.cx, cy1=CV.cy+CV.r+6, cx2=CV.cx, cy2=cy1+co2Len;
+  ca.appendChild(el("path",{d:`M ${cx1} ${cy1} L ${cx2} ${cy2}`,stroke:"#6b7a92","stroke-width":1+co2Rate*4,fill:"none","stroke-linecap":"round",opacity:0.35+co2Rate*0.65,"marker-end":"url(#cellArrow)"}));
+
+  // mitochondria glow
+  for(let i=0;i<4;i++){
+    const gl = document.getElementById("mitoGlow_"+i);
+    if(gl) gl.setAttribute("opacity", 0.05 + o2Rate*0.45);
+  }
+
+  // drug banner at bottom (y=440..478), below all arrows
+  const banner = document.getElementById("drugBanner");
+  banner.innerHTML = "";
+  const bw=340, bh=38, bx=30, by=440;
+  if(ph.drug){
+    banner.appendChild(el("rect",{x:bx,y:by,width:bw,height:bh,rx:8,fill:"#fff1d6",stroke:"#d98324","stroke-width":1.5}));
+    banner.appendChild(textEl(bx+bw/2, by+15, ph.kind==="g" ? "MEDIUM SWAP" : "INJECTION", "#a06a1a", 10, 700, "middle"));
+    banner.appendChild(textEl(bx+bw/2, by+31, ph.drug, "#15233b", 12, 800, "middle"));
+  } else {
+    banner.appendChild(el("rect",{x:bx,y:by,width:bw,height:bh,rx:8,fill:"#eef3fa",stroke:"#d6deea","stroke-width":1.5}));
+    banner.appendChild(textEl(bx+bw/2, by+24, "No treatment · basal medium", "#6b7a92", 12, 700, "middle"));
+  }
+}
+
+/* ============================================================
+   PARAMETER READOUT (model-specific flags)
+   ============================================================ */
+const PARAM_DEFS = [
+  { key:"basalECAR", label:"Basal ECAR", unit:"mpH/min", cls:"ecar", phase:0, get:()=>phaseAvg(0,"e") },
+  { key:"basalOCR",  label:"Basal OCR",  unit:"pmol/min", cls:"ocr",  phase:0, get:()=>phaseAvg(0,"o") },
+  { key:"atpOCR",    label:"ATP-linked OCR", unit:"pmol/min", cls:"calc", phase:1, get:()=>phaseAvg(0,"o")-phaseAvg(1,"o") },
+  { key:"leakOCR",   label:"Proton-leak OCR", unit:"pmol/min", cls:"calc", phase:1, get:()=>phaseAvg(1,"o") },
+  { key:"glycCap",   label:"Glycolytic capacity", unit:"mpH/min", cls:"calc", phase:1, get:()=>phaseAvg(1,"e")-phaseAvg(2,"e") },
+  { key:"glycRes",   label:"Glycolytic reserve", unit:"mpH/min", cls:"calc", phase:1, get:()=>phaseAvg(1,"e")-phaseAvg(0,"e") },
+  { key:"nonGlyc",   label:"Non-glycolytic acid.", unit:"mpH/min", cls:"ecar", phase:2, get:()=>phaseAvg(2,"e") },
+  { key:"spareCap",  label:"Spare resp. capacity", unit:"pmol/min", cls:"calc", phase:3, get:()=>phaseAvg(3,"o")-phaseAvg(0,"o") },
+];
+// Flag thresholds for the disease model — values that would be clinically alarming
+function flagFor(key, val){
+  if(curModel!=="disease") return false;
+  if(key==="glycRes" && val < 10) return true;       // no reserve
+  if(key==="spareCap" && val < 5) return true;       // no / negative spare capacity
+  if(key==="atpOCR" && val < 15) return true;        // tiny ATP-linked
+  return false;
+}
+
+const readoutEl = document.getElementById("readout");
+function buildReadout(){
+  readoutEl.innerHTML = "";
+  PARAM_DEFS.forEach(p=>{
+    const d = document.createElement("div");
+    d.className = "r "+p.cls+" locked";
+    d.id = "ro_"+p.key;
+    d.innerHTML = `<div class="k">${p.label}</div><div class="v">—<span class="u">${p.unit}</span></div>`;
+    readoutEl.appendChild(d);
+  });
+}
+function updateReadout(t){
+  PARAM_DEFS.forEach(p=>{
+    const elx = document.getElementById("ro_"+p.key);
+    if(!elx) return;
+    const phIdx = PHASES.findIndex(p2 => t>=p2.t0 && t<p2.t1);
+    const curPhase = phIdx>=0 ? phIdx : PHASES.length-1;
+    if(curPhase >= p.phase){
+      elx.classList.remove("locked");
+      const v = p.get();
+      elx.querySelector(".v").innerHTML = v.toFixed(0)+`<span class="u">${p.unit}</span>`;
+      elx.classList.toggle("live", curPhase === p.phase);
+      elx.classList.toggle("flag", flagFor(p.key, v));
+    } else {
+      elx.classList.add("locked");
+      elx.classList.remove("live","flag");
+    }
+  });
+}
+
+/* ============================================================
+   TIMELINE STRIP
+   ============================================================ */
+const timelineEl = document.getElementById("timeline");
+function buildTimeline(){
+  timelineEl.innerHTML="";
+  PHASES.forEach((ph,i)=>{
+    const s = document.createElement("div");
+    s.className = "seg "+ph.kind;
+    s.id = "seg_"+i;
+    const shortName = ph.drug ? ph.drug.split(" ")[0] : "Basal";
+    s.textContent = (i+1)+". "+shortName;
+    s.title = ph.name;
+    s.onclick = ()=>{ stop(); curT = ph.t0; render(); };
+    timelineEl.appendChild(s);
+  });
+}
+function updateTimeline(t){
+  PHASES.forEach((ph,i)=>{
+    const s = document.getElementById("seg_"+i);
+    if(s) s.classList.toggle("cur", t>=ph.t0 && t<ph.t1);
+  });
+}
+
+/* ============================================================
+   PLAYBACK
+   ============================================================ */
+const phIdxEl = document.getElementById("phIdx");
+const tNowEl = document.getElementById("tNow");
+const phaseNameEl = document.getElementById("phaseName");
+const phaseDescEl = document.getElementById("phaseDesc");
+const barEl = document.getElementById("bar");
+const playBtn = document.getElementById("play");
+const prevBtn = document.getElementById("prev");
+const nextBtn = document.getElementById("next");
+const resetBtn = document.getElementById("reset");
+const speedSel = document.getElementById("speed");
+const chartSubEl = document.getElementById("chartSub");
+
+let curT = 0;
+let playing = false;
+let timer = null;
+
+function render(){
+  const r = rateAt(curT);
+  reveal(curT);
+  updateCell(curT, r);
+  updateReadout(curT);
+  updateTimeline(curT);
+  const phIdx = PHASES.findIndex(p => curT>=p.t0 && curT<p.t1);
+  const ph = phIdx>=0 ? PHASES[phIdx] : PHASES[PHASES.length-1];
+  phIdxEl.textContent = (phIdx>=0?phIdx+1:PHASES.length);
+  tNowEl.textContent = curT.toFixed(1);
+  phaseNameEl.textContent = ph.name;
+  phaseDescEl.innerHTML = ph.desc;
+  barEl.style.width = (curT/T_TOTAL*100)+"%";
+  prevBtn.disabled = curT<=0;
+  nextBtn.disabled = curT>=T_TOTAL;
+}
+function start(){
+  if(timer) return;
+  if(curT>=T_TOTAL) curT=0;
+  playing=true; playBtn.textContent="⏸ Pause";
+  const speedMul = 110/parseInt(speedSel.value,10);
+  const tickMs = DT * speedMul * 1000;
+  timer = setInterval(()=>{
+    curT += DT;
+    if(curT>=T_TOTAL){ curT=T_TOTAL; render(); stop(); return; }
+    render();
+  }, Math.max(20, tickMs));
+}
+function stop(){ playing=false; playBtn.textContent="▶ Play"; if(timer){clearInterval(timer); timer=null;} }
+
+prevBtn.onclick = ()=>{ stop(); curT=Math.max(0, curT-2); render(); };
+nextBtn.onclick = ()=>{ stop(); curT=Math.min(T_TOTAL, curT+2); render(); };
+playBtn.onclick = ()=>{ playing?stop():start(); };
+resetBtn.onclick = ()=>{ stop(); curT=0; render(); };
+speedSel.onchange = ()=>{ if(playing){ stop(); start(); } };
+
+/* ============================================================
+   MODEL SWITCHING
+   ============================================================ */
+function switchModel(key){
+  curModel = key;
+  PHASES = MODELS[key].phases;
+  buildData();
+  buildChartFrame();
+  buildCellFrame();
+  buildTimeline();
+  buildReadout();
+  renderInsight();
+  curT = 0;
+  render();
+  // update model buttons
+  document.getElementById("modelCancer").classList.toggle("active", key==="cancer");
+  document.getElementById("modelCancer").classList.toggle("cancer", key==="cancer");
+  document.getElementById("modelDisease").classList.toggle("active", key==="disease");
+  document.getElementById("modelDisease").classList.toggle("disease", key==="disease");
+  // update chart subtitle
+  chartSubEl.textContent = MODELS[key].tagline + " · click any timeline segment to jump.";
+}
+document.getElementById("modelCancer").onclick = ()=>{ if(curModel!=="cancer") switchModel("cancer"); };
+document.getElementById("modelDisease").onclick = ()=>{ if(curModel!=="disease") switchModel("disease"); };
+
+/* ============================================================
+   INSIGHT + COMPARISON TABLE
+   ============================================================ */
+function renderInsight(){
+  const titleEl = document.getElementById("insightTitle");
+  const bodyEl = document.getElementById("insightBody");
+  if(curModel==="cancer"){
+    titleEl.textContent = "How to read this assay — A549 cancer";
+    bodyEl.innerHTML = `
+      <p>The Seahorse XF Analyzer measures two fluxes simultaneously from the same well of living cells: <b>ECAR</b> (extracellular acidification rate, dominated by lactate + CO₂-derived protons) and <b>OCR</b> (O₂ consumption rate, dominated by mitochondrial Complex IV). Sequential injection of metabolic drugs partitions each flux into biologically meaningful components.</p>
+      <div class="grid">
+        <div class="cell"><div class="h">Oligomycin → ATP-linked vs leak</div><div class="t">OCR drop = <b>ATP-linked respiration</b>. Residual OCR = <b>proton leak</b>. ECAR rise = <b>glycolytic capacity</b> — how much more glycolysis the cell can muster when ATP synthase is blocked.</div></div>
+        <div class="cell"><div class="h">2-DG → glycolytic vs non-glycolytic</div><div class="t">ECAR collapse to the floor = <b>non-glycolytic acidification</b> (mostly CO₂). The drop from oligomycin-ECAR defines true <b>glycolytic capacity</b>.</div></div>
+        <div class="cell"><div class="h">Galactose → spare capacity</div><div class="t">Without glucose, the cell must run OXPHOS. OCR above basal = <b>spare respiratory capacity</b> — reserve Complex I–IV flux unused in glucose but deployable under stress.</div></div>
+      </div>`;
+  } else {
+    titleEl.textContent = "How to read this assay — Complex I-deficient fibroblast";
+    bodyEl.innerHTML = `
+      <p>This patient fibroblast carries a pathogenic <b>MT-ND1 (m.3460G&gt;A)</b> mutation causing <b>Leber Hereditary Optic Neuropathy (LHON)</b>-plus mitochondrial disease. Complex I (NADH:ubiquinone oxidoreductase) flux is severely reduced, so the cell compensates by leaning on glycolysis — even at baseline it looks superficially "Warburg-like". The Seahorse assay unmasks the difference.</p>
+      <div class="grid">
+        <div class="cell"><div class="h">Basal — already compensated</div><div class="t"><b>High ECAR / low OCR</b> at baseline. The cell is glycolysis-dependent by necessity, not by choice. The A549 cell had OCR/ECAR ≈ 4; here it is &lt; 1.</div></div>
+        <div class="cell"><div class="h">Oligomycin — no reserve left</div><div class="t">OCR drops only a little (small ATP-linked component — Complex I was already the bottleneck). <b>ECAR barely rises</b>: glycolysis was already at ceiling, so <b>glycolytic reserve ≈ 0</b>. Flagged red in the readout.</div></div>
+        <div class="cell"><div class="h">Galactose — diagnostic crisis</div><div class="t">Without glucose the cell <b>cannot</b> switch to OXPHOS. <b>OCR does not rise — it falls further</b>, giving <b>negative spare capacity</b>. Clinically this is <b>galactose sensitivity</b>: patient fibroblasts die in galactose medium while healthy cells thrive. This is a functional diagnostic for suspected mitochondrial disease.</div></div>
+      </div>`;
+  }
+}
+
+function renderCompareTable(){
+  // compute both models' params side by side
+  const tbody = document.getElementById("compareBody");
+  tbody.innerHTML = "";
+  const rows = [
+    { label:"Basal ECAR",          unit:"mpH/min", a:30,  b:58,  interp:"Disease cell compensates with ↑ basal glycolysis" },
+    { label:"Basal OCR",           unit:"pmol/min", a:120, b:38,  interp:"Complex I bottleneck → low basal respiration" },
+    { label:"ATP-linked OCR",      unit:"pmol/min", a:78,  b:10,  interp:"Disease: tiny ATP-coupled component", flagB:true },
+    { label:"Proton-leak OCR",     unit:"pmol/min", a:42,  b:28,  interp:"Leak fraction is relatively higher in disease" },
+    { label:"Glycolytic capacity", unit:"mpH/min", a:66,  b:55,  interp:"Disease reaches ceiling with little headroom" },
+    { label:"Glycolytic reserve",  unit:"mpH/min", a:42,  b:4,   interp:"Disease: ≈0 — already at glycolytic ceiling", flagB:true },
+    { label:"Spare resp. capacity",unit:"pmol/min", a:32,  b:-20, interp:"Disease: NEGATIVE — cannot deploy OXPHOS on demand", flagB:true },
+  ];
+  rows.forEach(r=>{
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${r.label}</td>
+      <td class="num">${r.a}</td>
+      <td class="num ${r.flagB?'flag':''}">${r.b}</td>
+      <td>${r.interp}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+/* ============================================================
+   INIT
+   ============================================================ */
+buildData();
+buildChartFrame();
+buildCellFrame();
+buildTimeline();
+buildReadout();
+renderInsight();
+renderCompareTable();
+render();
+</script>
+</body>
+</html>
