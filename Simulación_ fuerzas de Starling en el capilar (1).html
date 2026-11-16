@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fuerzas de Starling en el capilar</title>
+<style>
+:root{--bg:#f6f7f9;--fg:#1c2530;--mut:#5d6b7a;--card:#ffffff;--line:#d5dbe2;--hyd:#d9480f;--onc:#1c6fc4;--filt:#e8890c;--abs:#0f9b8a;--rbc:#c92a2a;--alb:#b8860b;--lum:#fbe9e7;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#10161d;--fg:#e8edf2;--mut:#98a6b5;--card:#18212b;--line:#2d3a47;--hyd:#ff8a5c;--onc:#5aa9ff;--filt:#ffb13b;--abs:#3fd6c1;--rbc:#e0545a;--alb:#e6b94a;--lum:#2a1f24}}
+:root[data-theme="dark"]{--bg:#10161d;--fg:#e8edf2;--mut:#98a6b5;--card:#18212b;--line:#2d3a47;--hyd:#ff8a5c;--onc:#5aa9ff;--filt:#ffb13b;--abs:#3fd6c1;--rbc:#e0545a;--alb:#e6b94a;--lum:#2a1f24}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 "Source Sans 3","Segoe UI",system-ui,sans-serif}
+main{max-width:980px;margin:0 auto;padding:20px 16px 32px}
+h1{font:700 26px/1.2 Georgia,"Times New Roman",serif;margin:0 0 6px}
+.sub{color:var(--mut);margin:0 0 14px;max-width:70ch}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:12px}
+canvas{width:100%;height:auto;display:block}
+.chips{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:14px;margin:0 0 10px}
+.chips span{display:flex;align-items:center;gap:6px}
+.chips i{width:12px;height:12px;border-radius:50%;display:inline-block}
+.read{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:12px}
+.read div{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:14px;color:var(--mut)}
+.read b{display:block;font-size:22px;color:var(--fg);font-variant-numeric:tabular-nums}
+.ctrl{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px 18px}
+.ctrl label{font-size:14px;display:block}
+.ctrl input{width:100%}
+.btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+button{font:inherit;font-size:14px;padding:7px 12px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--fg);cursor:pointer}
+button:hover{border-color:var(--onc)}button:focus-visible,input:focus-visible{outline:2px solid var(--onc);outline-offset:2px}
+#msg{font-size:15px;margin:10px 2px 0;min-height:46px}
+</style>
+</head>
+<body>
+<main>
+<h1>Equilibrio de Starling en el capilar</h1>
+<p class="sub">Dos fuerzas opuestas actúan en todo el capilar: la presión hidrostática empuja agua hacia afuera y la presión oncótica de las proteínas la atrae hacia adentro. La hidrostática cae a lo largo del tubo; la oncótica no. Pasa el cursor sobre el esquema o el gráfico para explorar cada punto.</p>
+<div class="chips">
+<span><i style="background:var(--hyd)"></i>Agua que sale (P hidrostática)</span>
+<span><i style="background:var(--onc)"></i>Agua que entra (π oncótica)</span>
+<span><i style="background:var(--alb)"></i>Albúmina</span>
+<span><i style="background:var(--filt)"></i>Neto: filtración</span>
+<span><i style="background:var(--abs)"></i>Neto: absorción</span>
+</div>
+<div class="card"><canvas id="c" width="900" height="400" aria-label="Animación del capilar con flujos de agua"></canvas></div>
+<div class="card"><canvas id="g" width="900" height="230" aria-label="Gráfico de presiones a lo largo del capilar"></canvas></div>
+<div class="read">
+<div>Presión hidrostática<b id="rP">–</b></div>
+<div>Presión oncótica<b id="rO">–</b></div>
+<div>Presión neta<b id="rN">–</b></div>
+<div>En este punto<b id="rS" style="font-size:18px">–</b></div>
+</div>
+<p id="msg"></p>
+<div class="card">
+<div class="ctrl">
+<label>Presión hidrostática arteriolar: <b id="vA"></b> mmHg<input id="sA" type="range" min="15" max="60" value="35"></label>
+<label>Presión hidrostática venular: <b id="vV"></b> mmHg<input id="sV" type="range" min="0" max="40" value="15"></label>
+<label>Presión oncótica del plasma: <b id="vO"></b> mmHg<input id="sO" type="range" min="5" max="40" value="25"></label>
+<label>Presión hidrostática intersticial: <b id="vI"></b> mmHg<input id="sI" type="range" min="-5" max="15" value="0"></label>
+</div>
+<div class="btns">
+<button id="bN">Normal</button>
+<button id="bE">Edema: ↑ presión venosa</button>
+<button id="bH">Edema: ↓ albúmina</button>
+<button id="bP">Pausar</button>
+</div>
+</div>
+</main>
+<script>
+(function(){
+const $=id=>document.getElementById(id);
+const cv=$("c"),cx=cv.getContext("2d"),gv=$("g"),gx=gv.getContext("2d");
+const X0=70,X1=830,YT=165,YB=235,W=900;
+const S={A:35,V:15,O:25,I:0};
+const sl={A:$("sA"),V:$("sV"),O:$("sO"),I:$("sI")},vl={A:$("vA"),V:$("vV"),O:$("vO"),I:$("vI")};
+function sync(){for(const k in sl){S[k]=+sl[k].value;vl[k].textContent=S[k];}}
+for(const k in sl)sl[k].oninput=sync;
+function setP(a,v,o,i){sl.A.value=a;sl.V.value=v;sl.O.value=o;sl.I.value=i;sync();}
+$("bN").onclick=()=>setP(35,15,25,0);
+$("bE").onclick=()=>setP(40,30,25,0);
+$("bH").onclick=()=>setP(35,15,12,0);
+let paused=false;$("bP").onclick=()=>{paused=!paused;$("bP").textContent=paused?"Reanudar":"Pausar";};
+sync();
+const P=f=>S.A+(S.V-S.A)*f, Hy=f=>P(f)-S.I, Net=f=>Hy(f)-S.O;
+const css=getComputedStyle(document.documentElement);
+let C={};
+function colors(){const s=getComputedStyle(document.documentElement);["fg","mut","line","hyd","onc","filt","abs","rbc","alb","lum","card"].forEach(k=>C[k]=s.getPropertyValue("--"+k).trim());}
+// elementos del lumen
+const rbcs=[],albs=[],ps=[];
+for(let i=0;i<12;i++)rbcs.push({f:i/12,y:(Math.random()-.5)*34,r:Math.random()*6});
+for(let i=0;i<70;i++)albs.push({f:Math.random(),y:(Math.random()-.5)*56});
+let probe=0.3,hover=false;
+function toF(ev,el){const r=el.getBoundingClientRect();const x=(ev.clientX-r.left)/r.width*W;return Math.min(1,Math.max(0,(x-X0)/(X1-X0)));}
+[cv,gv].forEach(el=>{el.addEventListener("pointermove",e=>{hover=true;probe=toF(e,el);});el.addEventListener("pointerleave",()=>hover=false);});
+function arrow(x1,y1,x2,y2,col,w){const a=Math.atan2(y2-y1,x2-x1),h=Math.min(9,Math.hypot(x2-x1,y2-y1)*.6);
+cx.strokeStyle=col;cx.fillStyle=col;cx.lineWidth=w;cx.beginPath();cx.moveTo(x1,y1);cx.lineTo(x2-Math.cos(a)*h*.6,y2-Math.sin(a)*h*.6);cx.stroke();
+cx.beginPath();cx.moveTo(x2,y2);cx.lineTo(x2-h*Math.cos(a-.45),y2-h*Math.sin(a-.45));cx.lineTo(x2-h*Math.cos(a+.45),y2-h*Math.sin(a+.45));cx.closePath();cx.fill();}
+function eqF(){const d=S.A-S.V;if(Math.abs(d)<1e-6)return null;const f=(S.A-S.I-S.O)/d;return f>0&&f<1?f:null;}
+function frame(t){
+colors();
+if(!paused){
+ for(let k=0;k<3;k++){const f=Math.random(),x=X0+f*(X1-X0),side=Math.random()<.5?-1:1;
+  if(Math.random()<Math.max(Hy(f),0)/80)ps.push({x,side,t:0,o:true});
+  if(Math.random()<Math.max(S.O,0)/80)ps.push({x,side,t:0,o:false});}
+ for(let i=ps.length-1;i>=0;i--){ps[i].t+=.013;ps[i].x+=.15;if(ps[i].t>=1)ps.splice(i,1);}
+ const sp=(P(0)>0?.0016:.001);
+ rbcs.forEach(r=>{const f=r.f;r.f=(f+sp*(1.2-.5*f))%1;r.r+=.03;});
+ albs.forEach(a=>{a.f=(a.f+sp*(1.2-.5*a.f))%1;a.y+=(Math.random()-.5)*1.2;a.y=Math.max(-27,Math.min(27,a.y));});
+ if(!hover)probe=(probe+.0007)%1;
+}
+// ---- esquema
+cx.clearRect(0,0,W,400);
+const ymid=(YT+YB)/2;
+cx.fillStyle=C.lum;cx.fillRect(X0,YT,X1-X0,YB-YT);
+cx.font="13px system-ui,sans-serif";cx.fillStyle=C.mut;
+cx.fillText("Intersticio",X0,24);cx.fillText("Intersticio",X0,392);
+cx.textAlign="left";cx.fillText("Extremo arteriolar",X0,ymid-2);cx.textAlign="right";cx.fillText("Extremo venular",X1,ymid-2);cx.textAlign="left";
+// paredes con poros
+cx.strokeStyle=C.mut;cx.lineWidth=4;cx.setLineDash([22,5]);
+[YT,YB].forEach(y=>{cx.beginPath();cx.moveTo(X0,y);cx.lineTo(X1,y);cx.stroke();});cx.setLineDash([]);
+// eritrocitos y albúmina
+rbcs.forEach(r=>{cx.fillStyle=C.rbc;cx.globalAlpha=.85;cx.beginPath();cx.ellipse(X0+r.f*(X1-X0),ymid+r.y,9,5.5,Math.sin(r.r)*.5,0,7);cx.fill();});
+cx.globalAlpha=1;cx.fillStyle=C.alb;
+albs.forEach(a=>{cx.beginPath();cx.arc(X0+a.f*(X1-X0),ymid+a.y,2.6,0,7);cx.fill();});
+// partículas de agua
+ps.forEach(p=>{const wall=p.side<0?YT:YB,d=60*(p.o?p.t:1-p.t);
+ cx.globalAlpha=Math.sin(Math.PI*p.t)*.95;cx.fillStyle=p.o?C.hyd:C.onc;
+ cx.beginPath();cx.arc(p.x,wall+p.side*(d+4),3.4,0,7);cx.fill();});
+cx.globalAlpha=1;
+// flechas de fuerzas (arriba) y neto (abajo)
+const f0=eqF();
+for(let i=0;i<10;i++){const f=(i+.5)/10,x=X0+f*(X1-X0);
+ const h=Math.max(Hy(f),0)*2.1,o=Math.max(S.O,0)*2.1,n=Net(f);
+ if(h>1)arrow(x-9,YT-6,x-9,YT-6-h,C.hyd,3);
+ if(o>1)arrow(x+9,YT-6-o,x+9,YT-6,C.onc,3);
+ const L=Math.abs(n)*4;
+ if(L>2){if(n>0)arrow(x,YB+6,x,YB+6+L,C.filt,5);else arrow(x,YB+6+L,x,YB+6,C.abs,5);}
+}
+cx.font="600 13px system-ui,sans-serif";
+cx.fillStyle=C.hyd;cx.fillText("Fuerza hidrostática ↑ (decrece)",X0+4,YT-96>30?YT-98:40);
+cx.fillStyle=C.onc;cx.textAlign="right";cx.fillText("Fuerza oncótica ↓ (constante)",X1,YT-98>30?YT-98:40);cx.textAlign="left";
+// zonas
+const bx=f=>X0+f*(X1-X0);
+let zs=[];
+const nA=Net(0),nV=Net(1);
+if(f0!==null){zs=nA>0?[[0,f0,"FILTRACIÓN",C.filt],[f0,1,"ABSORCIÓN",C.abs]]:[[0,f0,"ABSORCIÓN",C.abs],[f0,1,"FILTRACIÓN",C.filt]];}
+else zs=[[0,1,nA>0?"SOLO FILTRACIÓN":"SOLO ABSORCIÓN",nA>0?C.filt:C.abs]];
+cx.font="700 15px system-ui,sans-serif";
+zs.forEach(z=>{cx.fillStyle=z[3];cx.textAlign="center";cx.fillText(z[2],bx((z[0]+z[1])/2),384);
+ cx.fillRect(bx(z[0]),390,bx(z[1])-bx(z[0]),4);});
+cx.textAlign="left";
+if(f0!==null){cx.strokeStyle=C.fg;cx.lineWidth=1;cx.setLineDash([4,4]);cx.beginPath();cx.moveTo(bx(f0),30);cx.lineTo(bx(f0),374);cx.stroke();cx.setLineDash([]);
+ cx.fillStyle=C.fg;cx.font="12px system-ui,sans-serif";cx.textAlign="center";cx.fillText("Flujo neto = 0",bx(f0),372);cx.textAlign="left";}
+// sonda
+cx.strokeStyle=C.fg;cx.globalAlpha=.5;cx.lineWidth=1.5;cx.beginPath();cx.moveTo(bx(probe),YT-4);cx.lineTo(bx(probe),YB+4);cx.stroke();cx.globalAlpha=1;
+// ---- gráfico
+gx.clearRect(0,0,W,230);
+const gT=22,gB=195,ymax=Math.max(40,S.A+5,S.O+5),ymin=Math.min(0,S.I-2,S.V-2);
+const gy=v=>gB-(v-ymin)/(ymax-ymin)*(gB-gT);
+gx.font="12px system-ui,sans-serif";gx.fillStyle=C.mut;gx.strokeStyle=C.line;gx.lineWidth=1;
+for(let v=Math.ceil(ymin/10)*10;v<=ymax;v+=10){gx.beginPath();gx.moveTo(X0,gy(v));gx.lineTo(X1,gy(v));gx.stroke();gx.textAlign="right";gx.fillText(v,X0-6,gy(v)+4);}
+gx.textAlign="left";gx.fillText("mmHg",12,gT+2);
+const N=120;
+for(let i=0;i<N;i++){const f=(i+.5)/N,a=gy(Hy(f)),b=gy(S.O);gx.fillStyle=Net(f)>0?C.filt:C.abs;gx.globalAlpha=.4;gx.fillRect(bx(i/N),Math.min(a,b),(X1-X0)/N+1,Math.abs(a-b));}
+gx.globalAlpha=1;gx.lineWidth=3;
+gx.strokeStyle=C.hyd;gx.beginPath();gx.moveTo(X0,gy(Hy(0)));gx.lineTo(X1,gy(Hy(1)));gx.stroke();
+gx.strokeStyle=C.onc;gx.beginPath();gx.moveTo(X0,gy(S.O));gx.lineTo(X1,gy(S.O));gx.stroke();
+gx.font="600 13px system-ui,sans-serif";gx.fillStyle=C.hyd;gx.fillText("P hidrostática",X0+8,gy(Hy(0))-8);
+gx.fillStyle=C.onc;gx.textAlign="right";gx.fillText("π oncótica",X1-8,gy(S.O)-8);gx.textAlign="left";
+gx.fillStyle=C.mut;gx.font="12px system-ui,sans-serif";gx.fillText("Extremo arteriolar",X0,gB+20);gx.textAlign="right";gx.fillText("Extremo venular",X1,gB+20);gx.textAlign="center";gx.fillText("Posición a lo largo del capilar",(X0+X1)/2,gB+20);gx.textAlign="left";
+if(f0!==null){gx.strokeStyle=C.fg;gx.lineWidth=1;gx.setLineDash([4,4]);gx.beginPath();gx.moveTo(bx(f0),gT);gx.lineTo(bx(f0),gB);gx.stroke();gx.setLineDash([]);}
+gx.strokeStyle=C.fg;gx.globalAlpha=.6;gx.lineWidth=1.5;gx.beginPath();gx.moveTo(bx(probe),gT);gx.lineTo(bx(probe),gB);gx.stroke();gx.globalAlpha=1;
+gx.fillStyle=C.fg;[[Hy(probe)],[S.O]].forEach(a=>{gx.beginPath();gx.arc(bx(probe),gy(a[0]),5,0,7);gx.fill();});
+// lecturas
+const n=Net(probe);
+$("rP").textContent=Hy(probe).toFixed(1)+" mmHg";$("rO").textContent=S.O.toFixed(1)+" mmHg";
+$("rN").textContent=(n>0?"+":"")+n.toFixed(1)+" mmHg";$("rN").style.color=Math.abs(n)<.5?C.fg:(n>0?C.filt:C.abs);
+$("rS").textContent=Math.abs(n)<.5?"Equilibrio":(n>0?"Filtración (sale agua)":"Absorción (entra agua)");
+requestAnimationFrame(frame);
+}
+// mensaje con totales (se actualiza al cambiar parámetros y cada medio segundo)
+function msg(){let fi=0,ab=0;for(let i=0;i<200;i++){const n=Net((i+.5)/200);if(n>0)fi+=n/200;else ab-=n/200;}
+const ex=fi-ab;
+$("msg").innerHTML="Promedio de fuerza neta que saca agua: <b style=\"color:var(--filt)\">"+fi.toFixed(1)+"</b> mmHg · que la devuelve: <b style=\"color:var(--abs)\">"+ab.toFixed(1)+"</b> mmHg. "+
+(ex>0.5?"La filtración supera a la absorción: el exceso (≈ "+ex.toFixed(1)+" mmHg·equivalentes) regresa por los linfáticos; si se rebasa su capacidad, aparece edema.":ex<-0.5?"Predomina la absorción en todo el capilar.":"Filtración y absorción casi se igualan.");}
+setInterval(msg,400);msg();
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
